@@ -230,7 +230,7 @@ function updateKPICards(data) {
         aumChangeEl.textContent = `${prefix}${aumChange.toFixed(1)}% last 30 days`;
         aumChangeEl.className = `kpi-change ${changeClass}`;
     } else {
-        aumChangeEl.textContent = '--';
+        aumChangeEl.textContent = '-';
         aumChangeEl.className = 'kpi-change neutral';
     }
     
