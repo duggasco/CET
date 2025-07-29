@@ -113,6 +113,11 @@ function updateKPICards(data) {
         countLabel = 'Active Accounts';
         countIcon = 'A';
         countValue = data.account_details ? data.account_details.length : 0;
+    } else if (currentFilter.type === 'multi-account') {
+        // When viewing multiple accounts, show account count
+        countLabel = 'Active Accounts';
+        countIcon = 'A';
+        countValue = data.account_details ? data.account_details.length : 0;
     } else {
         // Overview mode - show total clients
         countValue = data.client_balances ? data.client_balances.length : 0;
@@ -141,6 +146,9 @@ function updateKPICards(data) {
         totalFunds = data.fund_allocation ? data.fund_allocation.length : 0;
     } else if (currentFilter.type === 'multi-client-fund') {
         // When viewing multiple clients and funds, show fund count
+        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+    } else if (currentFilter.type === 'multi-account') {
+        // When viewing multiple accounts, show fund count
         totalFunds = data.fund_balances ? data.fund_balances.length : 0;
     } else {
         // Overview mode - show total funds
@@ -179,6 +187,9 @@ function updateKPICards(data) {
     } else if (currentFilter.type === 'multi-client-fund') {
         // For multi-client-fund view, use fund balances
         dataForGrowth = data.fund_balances || [];
+    } else if (currentFilter.type === 'multi-account') {
+        // For multi-account view, use account details
+        dataForGrowth = data.account_details || [];
     }
     
     if (dataForGrowth.length > 0) {
@@ -915,8 +926,20 @@ function handleClientClick(clientId, clientName, row) {
         row.classList.add('selected');
     }
     
+    // Store current scroll positions before update
+    const clientTableScroll = document.querySelector('#clientTable').parentElement.scrollTop;
+    const fundTableScroll = document.querySelector('#fundTable').parentElement.scrollTop;
+    const accountTableScroll = document.querySelector('#accountTable').parentElement.scrollTop;
+    
     // Update data based on current selections
     updateDataBasedOnSelections();
+    
+    // Restore scroll positions after update
+    setTimeout(() => {
+        document.querySelector('#clientTable').parentElement.scrollTop = clientTableScroll;
+        document.querySelector('#fundTable').parentElement.scrollTop = fundTableScroll;
+        document.querySelector('#accountTable').parentElement.scrollTop = accountTableScroll;
+    }, 0);
 }
 
 // Handle fund row click
@@ -933,8 +956,20 @@ function handleFundClick(fundName, row) {
         row.classList.add('selected');
     }
     
+    // Store current scroll positions before update
+    const clientTableScroll = document.querySelector('#clientTable').parentElement.scrollTop;
+    const fundTableScroll = document.querySelector('#fundTable').parentElement.scrollTop;
+    const accountTableScroll = document.querySelector('#accountTable').parentElement.scrollTop;
+    
     // Update data based on current selections
     updateDataBasedOnSelections();
+    
+    // Restore scroll positions after update
+    setTimeout(() => {
+        document.querySelector('#clientTable').parentElement.scrollTop = clientTableScroll;
+        document.querySelector('#fundTable').parentElement.scrollTop = fundTableScroll;
+        document.querySelector('#accountTable').parentElement.scrollTop = accountTableScroll;
+    }, 0);
 }
 
 // Handle account row click
@@ -1383,14 +1418,43 @@ async function loadFilteredData() {
             updateRecentChart(recentHistory);
             updateLongTermChart(longTermHistory);
             
-            // Show ALL clients and funds, not just selected ones
+            // Show ALL clients and funds with their full balances
             if (allData && allData.client_balances) {
                 updateClientTable(allData.client_balances);
             } else {
                 updateClientTable(Array.from(clientTotals.values()));
             }
             
-            if (allData && allData.fund_balances) {
+            // When multiple clients are selected, we need to show fund balances
+            // aggregated across only those selected clients, not system-wide totals
+            if (selectedClientIds.length > 0) {
+                // We already have fundTotals aggregated for the intersection
+                // but we need all funds that exist for the selected clients
+                const allFundsForClients = new Map();
+                
+                // Fetch all funds for each selected client to get complete picture
+                const clientPromises = selectedClientIds.map(clientId => 
+                    fetch(`/api/client/${clientId}`).then(r => r.json())
+                );
+                const clientDataArray = await Promise.all(clientPromises);
+                
+                // Aggregate all funds across selected clients
+                clientDataArray.forEach(clientData => {
+                    if (clientData.fund_balances) {
+                        clientData.fund_balances.forEach(fund => {
+                            if (allFundsForClients.has(fund.fund_name)) {
+                                const existing = allFundsForClients.get(fund.fund_name);
+                                existing.total_balance += fund.total_balance;
+                                existing.account_count += fund.account_count;
+                            } else {
+                                allFundsForClients.set(fund.fund_name, { ...fund });
+                            }
+                        });
+                    }
+                });
+                
+                updateFundTable(Array.from(allFundsForClients.values()));
+            } else if (allData && allData.fund_balances) {
                 updateFundTable(allData.fund_balances);
             } else {
                 updateFundTable(Array.from(fundTotals.values()));
@@ -1401,6 +1465,196 @@ async function loadFilteredData() {
                 client_balances: Array.from(clientTotals.values()),
                 fund_balances: Array.from(fundTotals.values()),
                 account_details: accounts,
+                recent_history: recentHistory,
+                long_term_history: longTermHistory
+            });
+            
+            restoreSelectionVisuals();
+        }
+        // Handle multiple accounts with optional client/fund context
+        else if (hasAccountSelection && (selectionState.accounts.size > 1 || hasClientSelection || hasFundSelection)) {
+            const selectedAccountIds = Array.from(selectionState.accounts);
+            const selectedClientIds = Array.from(selectionState.clients);
+            const selectedFundNames = Array.from(selectionState.funds);
+            
+            // Determine what context we're in
+            let contextData = null;
+            let clientFilter = new Set();
+            let fundFilter = new Set();
+            
+            // If we have client/fund selections, fetch that filtered data first
+            if (selectedClientIds.length > 0 && selectedFundNames.length > 0) {
+                // Client-fund context - fetch intersection
+                const promises = [];
+                selectedClientIds.forEach(clientId => {
+                    selectedFundNames.forEach(fundName => {
+                        promises.push(
+                            fetch(`/api/client/${clientId}/fund/${encodeURIComponent(fundName)}`)
+                                .then(r => r.json())
+                                .then(data => ({ clientId, fundName, data }))
+                                .catch(() => ({ clientId, fundName, data: null }))
+                        );
+                    });
+                });
+                
+                const results = await Promise.all(promises);
+                const accountsInContext = new Set();
+                
+                results.forEach(({ clientId, fundName, data }) => {
+                    if (data && data.account_details) {
+                        data.account_details.forEach(acc => {
+                            accountsInContext.add(acc.account_id);
+                            clientFilter.add(clientId);
+                            fundFilter.add(fundName);
+                        });
+                    }
+                });
+                
+                // Filter selected accounts to only those in the client-fund context
+                const filteredAccountIds = selectedAccountIds.filter(id => accountsInContext.has(id));
+                if (filteredAccountIds.length === 0) {
+                    // No selected accounts match the context, show all in context
+                    await loadFilteredData(); // This will handle the client-fund intersection
+                    return;
+                }
+                selectedAccountIds.splice(0, selectedAccountIds.length, ...filteredAccountIds);
+            } else if (selectedClientIds.length > 0) {
+                // Client context only
+                selectedClientIds.forEach(id => clientFilter.add(id));
+            } else if (selectedFundNames.length > 0) {
+                // Fund context only
+                selectedFundNames.forEach(name => fundFilter.add(name));
+            }
+            
+            // Fetch account data for each selected account
+            const accountDataPromises = selectedAccountIds.map(accountId => 
+                fetch(`/api/account/${encodeURIComponent(accountId)}`).then(r => r.json())
+            );
+            const accountDataArray = await Promise.all(accountDataPromises);
+            
+            // Aggregate data from selected accounts
+            const clientMap = new Map();
+            const fundMap = new Map();
+            const accountsMap = new Map();
+            let totalBalance = 0;
+            
+            // Process each account's data
+            accountDataArray.forEach((data, index) => {
+                const accountId = selectedAccountIds[index];
+                
+                // Calculate total balance for this account
+                let accountBalance = 0;
+                if (data.fund_allocation) {
+                    accountBalance = data.fund_allocation.reduce((sum, fund) => sum + fund.balance, 0);
+                }
+                
+                // Find account info from allData to get client name
+                let accountInfo = null;
+                if (allData && allData.account_details) {
+                    accountInfo = allData.account_details.find(a => a.account_id === accountId);
+                }
+                
+                if (accountInfo) {
+                    // Apply client filter if exists
+                    const clientInfo = allData.client_balances.find(c => c.client_name === accountInfo.client_name);
+                    if (clientInfo && (clientFilter.size === 0 || clientFilter.has(clientInfo.client_id))) {
+                        // Add or update client
+                        if (!clientMap.has(clientInfo.client_id)) {
+                            clientMap.set(clientInfo.client_id, { ...clientInfo, total_balance: 0 });
+                        }
+                        
+                        // Create enhanced account info with current balance
+                        const enhancedAccountInfo = {
+                            ...accountInfo,
+                            balance: accountBalance,
+                            total_balance: accountBalance
+                        };
+                        accountsMap.set(accountId, enhancedAccountInfo);
+                        
+                        // Process funds for this account
+                        data.fund_allocation.forEach(fund => {
+                            // Apply fund filter if exists
+                            if (fundFilter.size === 0 || fundFilter.has(fund.fund_name)) {
+                                const fundBalance = fund.balance;
+                                
+                                // Update client balance
+                                clientMap.get(clientInfo.client_id).total_balance += fundBalance;
+                                
+                                // Update fund totals
+                                if (!fundMap.has(fund.fund_name)) {
+                                    const fundInfo = allData.fund_balances.find(f => f.fund_name === fund.fund_name);
+                                    if (fundInfo) {
+                                        fundMap.set(fund.fund_name, { ...fundInfo, total_balance: 0, account_count: 0 });
+                                    }
+                                }
+                                if (fundMap.has(fund.fund_name)) {
+                                    fundMap.get(fund.fund_name).total_balance += fundBalance;
+                                    fundMap.get(fund.fund_name).account_count += 1;
+                                }
+                                
+                                totalBalance += fundBalance;
+                            }
+                        });
+                    }
+                }
+            });
+            
+            // Aggregate historical data from all selected accounts
+            const recentHistoryMap = new Map();
+            const longTermHistoryMap = new Map();
+            
+            // Process each account's historical data
+            accountDataArray.forEach((data) => {
+                if (data.recent_history) {
+                    data.recent_history.forEach(item => {
+                        const existing = recentHistoryMap.get(item.balance_date) || 0;
+                        recentHistoryMap.set(item.balance_date, existing + item.total_balance);
+                    });
+                }
+                
+                if (data.long_term_history) {
+                    data.long_term_history.forEach(item => {
+                        const existing = longTermHistoryMap.get(item.balance_date) || 0;
+                        longTermHistoryMap.set(item.balance_date, existing + item.total_balance);
+                    });
+                }
+            });
+            
+            // Convert maps to sorted arrays
+            const recentHistory = Array.from(recentHistoryMap.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([balance_date, total_balance]) => ({ balance_date, total_balance }));
+                
+            const longTermHistory = Array.from(longTermHistoryMap.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([balance_date, total_balance]) => ({ balance_date, total_balance }));
+            
+            // Update UI
+            currentFilter = { 
+                type: 'multi-account', 
+                accountIds: selectedAccountIds,
+                clientIds: selectedClientIds,
+                fundNames: selectedFundNames
+            };
+            
+            updateRecentChart(recentHistory);
+            updateLongTermChart(longTermHistory);
+            
+            // Always show all clients and funds for selection capability
+            if (allData) {
+                updateClientTable(allData.client_balances);
+                updateFundTable(allData.fund_balances);
+            } else {
+                // Fallback if allData not available
+                updateClientTable(Array.from(clientMap.values()));
+                updateFundTable(Array.from(fundMap.values()));
+            }
+            
+            updateAccountTable(Array.from(accountsMap.values()));
+            updateKPICards({
+                client_balances: Array.from(clientMap.values()),
+                fund_balances: Array.from(fundMap.values()),
+                account_details: Array.from(accountsMap.values()),
                 recent_history: recentHistory,
                 long_term_history: longTermHistory
             });
@@ -1462,30 +1716,33 @@ function clearAllSelections() {
 
 // Restore visual selections after data refresh
 function restoreSelectionVisuals() {
-    // Restore client selections
-    selectionState.clients.forEach(clientId => {
-        const row = document.querySelector(`#clientTable tr[data-client-id="${clientId}"]`);
-        if (row) {
-            row.classList.add('selected');
-        }
-    });
-    
-    // Restore fund selections
-    selectionState.funds.forEach(fundName => {
-        const rows = document.querySelectorAll('#fundTable tbody tr');
-        rows.forEach(row => {
-            if (row.dataset.fundName === fundName) {
+    // Use requestAnimationFrame to ensure DOM has updated
+    requestAnimationFrame(() => {
+        // Restore client selections
+        selectionState.clients.forEach(clientId => {
+            const row = document.querySelector(`#clientTable tr[data-client-id="${clientId}"]`);
+            if (row) {
                 row.classList.add('selected');
             }
         });
-    });
-    
-    // Restore account selections
-    selectionState.accounts.forEach(accountId => {
-        const row = document.querySelector(`#accountTable tr[data-account-id="${accountId}"]`);
-        if (row) {
-            row.classList.add('selected');
-        }
+        
+        // Restore fund selections
+        selectionState.funds.forEach(fundName => {
+            const rows = document.querySelectorAll('#fundTable tbody tr');
+            rows.forEach(row => {
+                if (row.dataset.fundName === fundName) {
+                    row.classList.add('selected');
+                }
+            });
+        });
+        
+        // Restore account selections
+        selectionState.accounts.forEach(accountId => {
+            const row = document.querySelector(`#accountTable tr[data-account-id="${accountId}"]`);
+            if (row) {
+                row.classList.add('selected');
+            }
+        });
     });
 }
 
