@@ -134,6 +134,54 @@ run_with_venv() {
     FLASK_PORT=${PORT} python app.py
 }
 
+# Function to stop the application
+stop_application() {
+    echo -e "${BLUE}=== Stopping Client Exploration Tool ===${NC}"
+    echo ""
+    
+    # Check for Docker container first
+    if command_exists docker && docker ps | grep -q "${APP_NAME}"; then
+        echo -e "${YELLOW}Stopping Docker container...${NC}"
+        if docker stop "${APP_NAME}"; then
+            echo -e "${GREEN}✓ Container stopped successfully${NC}"
+            docker rm "${APP_NAME}" 2>/dev/null
+            echo -e "${GREEN}✓ Container removed${NC}"
+        else
+            echo -e "${RED}✗ Failed to stop Docker container${NC}"
+            return 1
+        fi
+    else
+        # Check for native Python process
+        echo -e "${YELLOW}Looking for native Python process...${NC}"
+        
+        # Find process running on the port
+        if command_exists lsof; then
+            PID=$(lsof -ti:${PORT} 2>/dev/null)
+        elif command_exists netstat; then
+            PID=$(netstat -tulpn 2>/dev/null | grep ":${PORT}" | awk '{print $7}' | cut -d/ -f1)
+        else
+            # Try ps command as fallback
+            PID=$(ps aux | grep "[p]ython.*app.py" | awk '{print $2}')
+        fi
+        
+        if [ -n "$PID" ]; then
+            echo "Found process(es) on port ${PORT}: $PID"
+            for pid in $PID; do
+                if kill -15 $pid 2>/dev/null; then
+                    echo -e "${GREEN}✓ Process $pid stopped${NC}"
+                else
+                    echo -e "${YELLOW}Process $pid may have already stopped${NC}"
+                fi
+            done
+        else
+            echo -e "${YELLOW}No running process found on port ${PORT}${NC}"
+        fi
+    fi
+    
+    echo ""
+    echo -e "${GREEN}Application stopped.${NC}"
+}
+
 # Function to display help
 show_help() {
     echo "Usage: ./run.sh [OPTIONS] [PORT]"
@@ -143,6 +191,7 @@ show_help() {
     echo "  --venv      Force virtual environment deployment"
     echo "  --build     Build/rebuild only (Docker mode)"
     echo "  --port PORT Specify custom port (default: ${DEFAULT_PORT})"
+    echo "  --stop      Stop the running application"
     echo "  --help      Show this help message"
     echo ""
     echo "Examples:"
@@ -150,6 +199,8 @@ show_help() {
     echo "  ./run.sh 8080               # Auto-detect, use port 8080"
     echo "  ./run.sh --docker --port 3000  # Docker deployment on port 3000"
     echo "  ./run.sh --venv 8000        # Venv deployment on port 8000"
+    echo "  ./run.sh --stop             # Stop running application"
+    echo "  ./run.sh --stop --port 8080 # Stop application on port 8080"
     echo ""
     echo "By default, the script will:"
     echo "  1. Check if Docker is available and use it if found"
@@ -161,6 +212,7 @@ show_help() {
 FORCE_DOCKER=false
 FORCE_VENV=false
 BUILD_ONLY=false
+STOP_APP=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -174,6 +226,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --build)
             BUILD_ONLY=true
+            shift
+            ;;
+        --stop)
+            STOP_APP=true
             shift
             ;;
         --port)
@@ -204,7 +260,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Main execution logic
-if [ "$FORCE_VENV" = true ]; then
+if [ "$STOP_APP" = true ]; then
+    stop_application
+elif [ "$FORCE_VENV" = true ]; then
     run_with_venv
 elif [ "$FORCE_DOCKER" = true ]; then
     if command_exists docker; then

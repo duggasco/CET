@@ -1993,12 +1993,26 @@ function formatDateLong(dateString) {
 function formatPercentage(value) {
     if (value === null || value === undefined) return '<span class="neutral">N/A</span>';
     
-    // Ensure we're working with a number
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(numValue)) return '<span class="neutral">N/A</span>';
+    // If we receive HTML content (already formatted), extract the numeric value
+    if (typeof value === 'string') {
+        if (value.includes('<span')) {
+            // Extract number from already formatted HTML
+            const match = value.match(/([+-]?\d+\.?\d*)/);
+            if (match) {
+                value = parseFloat(match[1]);
+            } else {
+                return '<span class="neutral">N/A</span>';
+            }
+        } else {
+            // Parse regular string number
+            value = parseFloat(value);
+        }
+    }
     
-    const formatted = numValue.toFixed(1);
-    const prefix = numValue > 0 ? '+' : '';
-    const className = numValue > 0 ? 'positive' : numValue < 0 ? 'negative' : 'neutral';
+    if (isNaN(value)) return '<span class="neutral">N/A</span>';
+    
+    const formatted = value.toFixed(1);
+    const prefix = value > 0 ? '+' : '';
+    const className = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
     return `<span class="${className}">${prefix}${formatted}%</span>`;
 }
