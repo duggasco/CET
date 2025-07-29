@@ -12,6 +12,13 @@ let selectionState = {
     accounts: new Set()     // Set of selected account IDs
 };
 
+// Text filter state
+let textFilters = {
+    fundTicker: '',
+    clientName: '',
+    accountNumber: ''
+};
+
 // Mobile detection function
 function detectMobile() {
     // Check multiple conditions for mobile detection
@@ -44,12 +51,13 @@ document.addEventListener('DOMContentLoaded', function() {
     applyMobileClass();
     initializeCharts();
     initializeTableHandlers();
+    initializeFilterInputs();
     loadOverviewData();
     
     // Add document click listener for clearing selections
     document.addEventListener('click', function(e) {
         // Check if click is outside all tables and header
-        if (isClickOutsideTables(e.target) && !e.target.closest('header')) {
+        if (isClickOutsideTables(e.target) && !e.target.closest('header') && !e.target.closest('.filter-section')) {
             // Clear all selections and go to overview
             if (selectionState.clients.size > 0 || selectionState.funds.size > 0 || selectionState.accounts.size > 0) {
                 clearAllSelections();
@@ -64,12 +72,43 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Filter all data arrays in the response object
+function filterAllData(data) {
+    const filtered = { ...data };
+    
+    // Filter each data array if it exists
+    if (filtered.client_balances) {
+        filtered.client_balances = applyTextFiltersToData(filtered.client_balances, 'client');
+    }
+    if (filtered.fund_balances) {
+        filtered.fund_balances = applyTextFiltersToData(filtered.fund_balances, 'fund');
+    }
+    if (filtered.account_details) {
+        filtered.account_details = applyTextFiltersToData(filtered.account_details, 'account');
+    }
+    
+    return filtered;
+}
+
 // Update KPI cards with data based on current filter context
 function updateKPICards(data) {
-    // Calculate Total AUM from latest balance data
-    const latestBalance = data.recent_history && data.recent_history.length > 0 
-        ? data.recent_history[data.recent_history.length - 1].total_balance 
-        : 0;
+    // Apply text filters to the data
+    const filteredData = filterAllData(data);
+    
+    // Calculate Total AUM from filtered data
+    let totalAUM = 0;
+    if (filteredData.client_balances && filteredData.client_balances.length > 0) {
+        totalAUM = filteredData.client_balances.reduce((sum, client) => sum + (client.total_balance || 0), 0);
+    } else if (filteredData.fund_balances && filteredData.fund_balances.length > 0) {
+        totalAUM = filteredData.fund_balances.reduce((sum, fund) => sum + (fund.total_balance || 0), 0);
+    } else if (filteredData.account_details && filteredData.account_details.length > 0) {
+        totalAUM = filteredData.account_details.reduce((sum, account) => sum + (account.balance || account.total_balance || 0), 0);
+    } else if (data.recent_history && data.recent_history.length > 0) {
+        // Fallback to chart data if no table data
+        totalAUM = data.recent_history[data.recent_history.length - 1].total_balance;
+    }
+    
+    const latestBalance = totalAUM;
     
     // Calculate AUM change (compare to 30 days ago)
     let aumChange = null;
@@ -89,20 +128,20 @@ function updateKPICards(data) {
         // When viewing a specific client, show account count
         countLabel = 'Active Accounts';
         countIcon = 'A';
-        countValue = data.account_details ? data.account_details.length : 0;
+        countValue = filteredData.account_details ? filteredData.account_details.length : 0;
     } else if (currentFilter.type === 'multi-client') {
         // When viewing multiple clients, show account count
         countLabel = 'Active Accounts';
         countIcon = 'A';
-        countValue = data.account_details ? data.account_details.length : 0;
+        countValue = filteredData.account_details ? filteredData.account_details.length : 0;
     } else if (currentFilter.type === 'fund' || currentFilter.type === 'fund-account') {
         // When viewing a specific fund, show client count for that fund
         countLabel = 'Active Clients';
-        countValue = data.client_balances ? data.client_balances.length : 0;
+        countValue = filteredData.client_balances ? filteredData.client_balances.length : 0;
     } else if (currentFilter.type === 'multi-fund') {
         // When viewing multiple funds, show client count
         countLabel = 'Active Clients';
-        countValue = data.client_balances ? data.client_balances.length : 0;
+        countValue = filteredData.client_balances ? filteredData.client_balances.length : 0;
     } else if (currentFilter.type === 'account' || currentFilter.type === 'account-fund') {
         // When viewing a specific account, show 1 account
         countLabel = 'Active Accounts';
@@ -112,25 +151,25 @@ function updateKPICards(data) {
         // When viewing multiple clients and funds, show account count
         countLabel = 'Active Accounts';
         countIcon = 'A';
-        countValue = data.account_details ? data.account_details.length : 0;
+        countValue = filteredData.account_details ? filteredData.account_details.length : 0;
     } else if (currentFilter.type === 'multi-account') {
         // When viewing multiple accounts, show account count
         countLabel = 'Active Accounts';
         countIcon = 'A';
-        countValue = data.account_details ? data.account_details.length : 0;
+        countValue = filteredData.account_details ? filteredData.account_details.length : 0;
     } else {
         // Overview mode - show total clients
-        countValue = data.client_balances ? data.client_balances.length : 0;
+        countValue = filteredData.client_balances ? filteredData.client_balances.length : 0;
     }
     
     // Count funds based on context
     let totalFunds = 0;
     if (currentFilter.type === 'client' || currentFilter.type === 'client-account') {
         // When viewing a client, show funds they're invested in
-        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+        totalFunds = filteredData.fund_balances ? filteredData.fund_balances.length : 0;
     } else if (currentFilter.type === 'multi-client') {
         // When viewing multiple clients, show funds across all clients
-        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+        totalFunds = filteredData.fund_balances ? filteredData.fund_balances.length : 0;
     } else if (currentFilter.type === 'client-fund' || currentFilter.type === 'client-fund-account' || 
                currentFilter.type === 'client-fund-multi-account') {
         // When viewing a client-fund combination, show 1 fund
@@ -140,19 +179,19 @@ function updateKPICards(data) {
         totalFunds = 1;
     } else if (currentFilter.type === 'multi-fund') {
         // When viewing multiple funds, show selected fund count
-        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+        totalFunds = filteredData.fund_balances ? filteredData.fund_balances.length : 0;
     } else if (currentFilter.type === 'account' || currentFilter.type === 'account-fund') {
         // When viewing an account, count unique funds
-        totalFunds = data.fund_allocation ? data.fund_allocation.length : 0;
+        totalFunds = filteredData.fund_allocation ? filteredData.fund_allocation.length : 0;
     } else if (currentFilter.type === 'multi-client-fund') {
         // When viewing multiple clients and funds, show fund count
-        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+        totalFunds = filteredData.fund_balances ? filteredData.fund_balances.length : 0;
     } else if (currentFilter.type === 'multi-account') {
         // When viewing multiple accounts, show fund count
-        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+        totalFunds = filteredData.fund_balances ? filteredData.fund_balances.length : 0;
     } else {
         // Overview mode - show total funds
-        totalFunds = data.fund_balances ? data.fund_balances.length : 0;
+        totalFunds = filteredData.fund_balances ? filteredData.fund_balances.length : 0;
     }
     
     // Calculate average YTD growth based on visible data
@@ -161,35 +200,35 @@ function updateKPICards(data) {
     
     // Determine which data to use for growth calculation
     if (currentFilter.type === 'overview' || currentFilter.type === 'date') {
-        dataForGrowth = data.client_balances || [];
+        dataForGrowth = filteredData.client_balances || [];
     } else if (currentFilter.type === 'client' || currentFilter.type === 'client-account') {
         // For client view, use fund balances to calculate weighted average
-        dataForGrowth = data.fund_balances || [];
+        dataForGrowth = filteredData.fund_balances || [];
     } else if (currentFilter.type === 'multi-client') {
         // For multi-client view, use client balances
-        dataForGrowth = data.client_balances || [];
+        dataForGrowth = filteredData.client_balances || [];
     } else if (currentFilter.type === 'client-fund' || currentFilter.type === 'client-fund-account' || 
                currentFilter.type === 'client-fund-multi-account') {
         // For client-fund view, use the single fund balance data
-        if (data.fund_balance) {
-            dataForGrowth = [data.fund_balance];
+        if (filteredData.fund_balance) {
+            dataForGrowth = [filteredData.fund_balance];
         } else {
-            dataForGrowth = data.fund_balances || [];
+            dataForGrowth = filteredData.fund_balances || [];
         }
     } else if (currentFilter.type === 'fund' || currentFilter.type === 'fund-account') {
-        dataForGrowth = data.client_balances || [];
+        dataForGrowth = filteredData.client_balances || [];
     } else if (currentFilter.type === 'multi-fund') {
         // For multi-fund view, use fund balances
-        dataForGrowth = data.fund_balances || [];
+        dataForGrowth = filteredData.fund_balances || [];
     } else if (currentFilter.type === 'account' || currentFilter.type === 'account-fund') {
         // For single account, use account details if available
-        dataForGrowth = data.account_details || [];
+        dataForGrowth = filteredData.account_details || [];
     } else if (currentFilter.type === 'multi-client-fund') {
         // For multi-client-fund view, use fund balances
-        dataForGrowth = data.fund_balances || [];
+        dataForGrowth = filteredData.fund_balances || [];
     } else if (currentFilter.type === 'multi-account') {
         // For multi-account view, use account details
-        dataForGrowth = data.account_details || [];
+        dataForGrowth = filteredData.account_details || [];
     }
     
     if (dataForGrowth.length > 0) {
@@ -789,14 +828,33 @@ async function loadAccountDataForFund(accountId, fundName) {
 
 // Update filter indicator
 function updateFilterIndicator(text) {
-    document.getElementById('current-filter').textContent = `Viewing: ${text}`;
+    // Add text filter info if any are active
+    let filterText = text;
+    const activeTextFilters = [];
+    
+    if (textFilters.fundTicker) {
+        activeTextFilters.push(`Ticker: ${textFilters.fundTicker}`);
+    }
+    if (textFilters.clientName) {
+        activeTextFilters.push(`Client: ${textFilters.clientName}`);
+    }
+    if (textFilters.accountNumber) {
+        activeTextFilters.push(`Account: ${textFilters.accountNumber}`);
+    }
+    
+    if (activeTextFilters.length > 0) {
+        filterText += ` | ${activeTextFilters.join(', ')}`;
+    }
+    
+    document.getElementById('current-filter').textContent = `Viewing: ${filterText}`;
     
     // Show/hide clear filters button
     const clearButton = document.getElementById('clear-filters');
     const hasActiveFilters = selectionState.clients.size > 0 || 
                            selectionState.funds.size > 0 || 
                            selectionState.accounts.size > 0 ||
-                           (currentFilter.type !== 'overview' && currentFilter.type !== null);
+                           (currentFilter.type !== 'overview' && currentFilter.type !== null) ||
+                           textFilters.fundTicker || textFilters.clientName || textFilters.accountNumber;
     
     clearButton.style.display = hasActiveFilters ? 'block' : 'none';
 }
@@ -996,12 +1054,43 @@ function sampleDataPoints(data, maxPoints) {
     return sampled;
 }
 
+// Filter data based on text filters
+function applyTextFiltersToData(data, type) {
+    if (!textFilters.fundTicker && !textFilters.clientName && !textFilters.accountNumber) {
+        return data;
+    }
+    
+    return data.filter(item => {
+        let match = true;
+        
+        // Filter by fund ticker
+        if (textFilters.fundTicker && item.fund_ticker) {
+            match = match && item.fund_ticker.toLowerCase().includes(textFilters.fundTicker.toLowerCase());
+        }
+        
+        // Filter by client name
+        if (textFilters.clientName && item.client_name) {
+            match = match && item.client_name.toLowerCase().includes(textFilters.clientName.toLowerCase());
+        }
+        
+        // Filter by account number
+        if (textFilters.accountNumber && item.account_id) {
+            match = match && item.account_id.toLowerCase().includes(textFilters.accountNumber.toLowerCase());
+        }
+        
+        return match;
+    });
+}
+
 // Update client table
 function updateClientTable(data) {
     const tbody = document.querySelector('#clientTable tbody');
     tbody.innerHTML = '';
     
-    data.forEach(client => {
+    // Apply text filters
+    const filteredData = applyTextFiltersToData(data, 'client');
+    
+    filteredData.forEach(client => {
         const row = tbody.insertRow();
         row.dataset.clientId = client.client_id;
         row.dataset.clientName = client.client_name;
@@ -1019,9 +1108,13 @@ function updateFundTable(data) {
     const tbody = document.querySelector('#fundTable tbody');
     tbody.innerHTML = '';
     
-    data.forEach(fund => {
+    // Apply text filters
+    const filteredData = applyTextFiltersToData(data, 'fund');
+    
+    filteredData.forEach(fund => {
         const row = tbody.insertRow();
         row.dataset.fundName = fund.fund_name;
+        row.dataset.fundTicker = fund.fund_ticker;
         row.innerHTML = `
             <td>${fund.fund_name}</td>
             <td class="number">${formatCurrency(fund.total_balance)}</td>
@@ -1036,7 +1129,10 @@ function updateAccountTable(data) {
     const tbody = document.querySelector('#accountTable tbody');
     tbody.innerHTML = '';
     
-    data.forEach(account => {
+    // Apply text filters
+    const filteredData = applyTextFiltersToData(data, 'account');
+    
+    filteredData.forEach(account => {
         const row = tbody.insertRow();
         row.dataset.accountId = account.account_id;
         // Store client and fund info in data attributes for filtering
@@ -1052,6 +1148,55 @@ function updateAccountTable(data) {
 }
 
 // Initialize table click handlers once on page load
+// Initialize filter input handlers
+function initializeFilterInputs() {
+    const fundTickerInput = document.getElementById('fundTickerFilter');
+    const clientNameInput = document.getElementById('clientNameFilter');
+    const accountNumberInput = document.getElementById('accountNumberFilter');
+    const applyButton = document.getElementById('applyFilters');
+    
+    // Apply filters on button click
+    applyButton.addEventListener('click', applyTextFilters);
+    
+    // Apply filters on Enter key
+    [fundTickerInput, clientNameInput, accountNumberInput].forEach(input => {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                applyTextFilters();
+            }
+        });
+    });
+    
+    // Update clear filters button to also clear text filters
+    const clearButton = document.getElementById('clear-filters');
+    clearButton.addEventListener('click', function() {
+        // Clear text filters
+        fundTickerInput.value = '';
+        clientNameInput.value = '';
+        accountNumberInput.value = '';
+        textFilters = {
+            fundTicker: '',
+            clientName: '',
+            accountNumber: ''
+        };
+        
+        // Clear selections
+        clearAllSelections();
+        loadOverviewData();
+    });
+}
+
+// Apply text filters
+function applyTextFilters() {
+    // Get filter values
+    textFilters.fundTicker = document.getElementById('fundTickerFilter').value.trim();
+    textFilters.clientName = document.getElementById('clientNameFilter').value.trim();
+    textFilters.accountNumber = document.getElementById('accountNumberFilter').value.trim();
+    
+    // Reload data with filters
+    updateDataBasedOnSelections();
+}
+
 function initializeTableHandlers() {
     // Client table clicks
     document.querySelector('#clientTable').addEventListener('click', function(e) {

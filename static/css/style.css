@@ -88,6 +88,77 @@ h1:hover {
     transform: scale(0.95);
 }
 
+/* Filter Section */
+.filter-section {
+    background: #ffffff;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e0e3e7;
+}
+
+.filter-inputs {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 150px;
+    max-width: 250px;
+}
+
+.filter-input-group label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #676879;
+    text-transform: uppercase;
+}
+
+.filter-input-group input {
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid #e0e3e7;
+    border-radius: 4px;
+    background: #ffffff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+}
+
+.filter-input-group input:focus {
+    outline: none;
+    border-color: #0085ff;
+    box-shadow: 0 0 0 2px rgba(0, 133, 255, 0.1);
+}
+
+.filter-input-group input::placeholder {
+    color: #c3c6ce;
+}
+
+.apply-filters-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    background-color: #0085ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.apply-filters-btn:hover {
+    background-color: #0066cc;
+}
+
+.apply-filters-btn:active {
+    transform: scale(0.95);
+}
+
 /* Main Content */
 .main-content {
     flex: 1;
@@ -560,6 +631,27 @@ body.mobile h1 {
 body.mobile .filter-indicator {
     font-size: 11px;
     padding: 4px 12px;
+}
+
+/* Mobile Filter Section */
+body.mobile .filter-section {
+    padding: 12px;
+}
+
+body.mobile .filter-inputs {
+    flex-direction: column;
+    gap: 8px;
+}
+
+body.mobile .filter-input-group {
+    max-width: 100%;
+    width: 100%;
+}
+
+body.mobile .apply-filters-btn {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 14px;
 }
 
 /* Mobile Main Content */
