@@ -1,4 +1,4 @@
-# Client Exploration Tool
+# Client Exploration Tool (CET)
 
 A Flask-based web application for exploring money market mutual fund client data with interactive charts and tables.
 
