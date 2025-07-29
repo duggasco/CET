@@ -584,9 +584,17 @@ async function loadAccountData(accountId) {
             }
         }
         
-        // Show the client that owns this account
+        // Show the client that owns this account with account-specific total
         if (clientId) {
-            updateClientTable([allData.client_balances.find(c => c.client_id === clientId)]);
+            const client = allData.client_balances.find(c => c.client_id === clientId);
+            if (client) {
+                // Calculate total balance for this account across all funds
+                const accountTotal = data.fund_allocation.reduce((sum, fund) => sum + fund.balance, 0);
+                updateClientTable([{
+                    ...client,
+                    total_balance: accountTotal
+                }]);
+            }
         }
         
         // Show funds in this account
@@ -598,9 +606,33 @@ async function loadAccountData(accountId) {
             ytd_change: null
         })));
         
-        // Show all accounts but highlight selected
-        if (allData && allData.account_details) {
-            updateAccountTable(allData.account_details);
+        // Show accounts based on current selection context
+        if (selectionState.clients.size > 0 && selectionState.funds.size > 0) {
+            // If client and fund are selected, show only accounts for that combination
+            const selectedClientId = Array.from(selectionState.clients)[0];
+            const selectedFundName = Array.from(selectionState.funds)[0];
+            
+            // Fetch the filtered account list
+            const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}`);
+            const filteredData = await filteredResponse.json();
+            updateAccountTable(filteredData.account_details);
+        } else if (selectionState.clients.size > 0) {
+            // If only client is selected, show accounts for that client
+            const selectedClientId = Array.from(selectionState.clients)[0];
+            const clientResponse = await fetch(`/api/client/${selectedClientId}`);
+            const clientData = await clientResponse.json();
+            updateAccountTable(clientData.account_details);
+        } else if (selectionState.funds.size > 0) {
+            // If only fund is selected, show accounts for that fund
+            const selectedFundName = Array.from(selectionState.funds)[0];
+            const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}`);
+            const fundData = await fundResponse.json();
+            updateAccountTable(fundData.account_details);
+        } else {
+            // No other selections, show all accounts
+            if (allData && allData.account_details) {
+                updateAccountTable(allData.account_details);
+            }
         }
         
         // Update KPIs with account data
@@ -610,6 +642,86 @@ async function loadAccountData(accountId) {
         restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading account data:', error);
+    }
+}
+
+// Load account data filtered by fund
+async function loadAccountDataForFund(accountId, fundName) {
+    try {
+        const response = await fetch(`/api/account/${encodeURIComponent(accountId)}/fund/${encodeURIComponent(fundName)}`);
+        const data = await response.json();
+        
+        currentFilter = { type: 'account-fund', accountId, fundName };
+        
+        // Update charts with account history for this specific fund
+        updateRecentChart(data.recent_history);
+        updateLongTermChart(data.long_term_history);
+        
+        // For account view, show related data
+        // Find the client for this account
+        let clientName = '';
+        let clientId = '';
+        if (allData && allData.account_details) {
+            const account = allData.account_details.find(acc => acc.account_id === accountId);
+            if (account) {
+                clientName = account.client_name;
+                // Find client ID
+                const client = allData.client_balances.find(c => c.client_name === clientName);
+                if (client) clientId = client.client_id;
+            }
+        }
+        
+        // Show the client that owns this account with filtered balance
+        if (clientId) {
+            const client = allData.client_balances.find(c => c.client_id === clientId);
+            if (client) {
+                // Show client with only the account-fund specific balance
+                updateClientTable([{
+                    ...client,
+                    total_balance: data.fund_allocation[0]?.balance || 0
+                }]);
+            }
+        }
+        
+        // Show only the selected fund for this account
+        updateFundTable([{ 
+            fund_name: fundName,
+            total_balance: data.fund_allocation[0]?.balance || 0,
+            account_count: 1,
+            qtd_change: null,
+            ytd_change: null
+        }]);
+        
+        // Show accounts based on current selection context
+        if (selectionState.clients.size > 0 && selectionState.funds.size > 0) {
+            // If client and fund are selected, show only accounts for that combination
+            const selectedClientId = Array.from(selectionState.clients)[0];
+            const selectedFundName = Array.from(selectionState.funds)[0];
+            
+            // Fetch the filtered account list
+            const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}`);
+            const filteredData = await filteredResponse.json();
+            updateAccountTable(filteredData.account_details);
+        } else if (selectionState.funds.size > 0) {
+            // If only fund is selected, show accounts for that fund
+            const selectedFundName = Array.from(selectionState.funds)[0];
+            const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}`);
+            const fundData = await fundResponse.json();
+            updateAccountTable(fundData.account_details);
+        } else {
+            // No other selections, show all accounts
+            if (allData && allData.account_details) {
+                updateAccountTable(allData.account_details);
+            }
+        }
+        
+        // Update KPIs with account data
+        updateKPICards(data);
+        
+        // Restore visual selections
+        restoreSelectionVisuals();
+    } catch (error) {
+        console.error('Error loading account data for fund:', error);
     }
 }
 
@@ -853,8 +965,17 @@ async function updateDataBasedOnSelections() {
             // Multiple funds - load filtered overview
             await loadFilteredData();
         }
-    } else if (hasClientSelection && hasFundSelection) {
-        // Client and fund selected
+    } else if (!hasClientSelection && !hasFundSelection && hasAccountSelection) {
+        // Only account(s) selected
+        if (selectionState.accounts.size === 1) {
+            const accountId = Array.from(selectionState.accounts)[0];
+            await loadAccountData(accountId);
+        } else {
+            // Multiple accounts - load filtered overview
+            await loadFilteredData();
+        }
+    } else if (hasClientSelection && hasFundSelection && !hasAccountSelection) {
+        // Client and fund selected (no account)
         if (selectionState.clients.size === 1 && selectionState.funds.size === 1) {
             const clientId = Array.from(selectionState.clients)[0];
             const fundName = Array.from(selectionState.funds)[0];
@@ -862,6 +983,21 @@ async function updateDataBasedOnSelections() {
             await loadClientFundData(clientId, clientName, fundName);
         } else {
             // Multiple selections - load filtered overview
+            await loadFilteredData();
+        }
+    } else if (hasAccountSelection && (hasClientSelection || hasFundSelection)) {
+        // Account selected with other selections - prioritize account view
+        if (selectionState.accounts.size === 1) {
+            const accountId = Array.from(selectionState.accounts)[0];
+            // If a specific fund is selected, load account data filtered by that fund
+            if (selectionState.funds.size === 1) {
+                const fundName = Array.from(selectionState.funds)[0];
+                await loadAccountDataForFund(accountId, fundName);
+            } else {
+                await loadAccountData(accountId);
+            }
+        } else {
+            // Multiple accounts or complex selection - load filtered overview
             await loadFilteredData();
         }
     } else {
@@ -875,12 +1011,100 @@ async function updateDataBasedOnSelections() {
 
 // Load filtered data based on multiple selections
 async function loadFilteredData() {
-    // For now, load overview and filter client-side
-    // In a real implementation, this would be a server-side filter
-    await loadOverviewData();
-    
-    // Apply client-side filtering
-    // This is a placeholder - would need proper implementation
+    try {
+        // When we have specific client-fund selection, maintain that context
+        if (selectionState.clients.size === 1 && selectionState.funds.size === 1) {
+            const clientId = Array.from(selectionState.clients)[0];
+            const fundName = Array.from(selectionState.funds)[0];
+            const clientName = document.querySelector(`#clientTable tr[data-client-id="${clientId}"] td:first-child`)?.textContent || '';
+            
+            // Load client-fund data to maintain filtering
+            const response = await fetch(`/api/client/${clientId}/fund/${encodeURIComponent(fundName)}`);
+            const data = await response.json();
+            
+            currentFilter = { type: 'client-fund-multi-account', clientId, clientName, fundName };
+            
+            // If specific accounts are selected, calculate totals only for those accounts
+            if (selectionState.accounts.size > 0) {
+                // Filter account details to only selected accounts
+                const selectedAccountIds = Array.from(selectionState.accounts);
+                const filteredAccounts = data.account_details.filter(acc => 
+                    selectedAccountIds.includes(acc.account_id)
+                );
+                
+                // Calculate total balance for selected accounts only
+                const selectedTotal = filteredAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+                
+                // Update charts with the filtered total
+                // We need to adjust the chart data to reflect only selected accounts
+                const totalBalance = data.fund_balance.total_balance;
+                updateRecentChart(data.recent_history.map(item => ({
+                    ...item,
+                    total_balance: item.total_balance * (selectedTotal / totalBalance)
+                })));
+                updateLongTermChart(data.long_term_history.map(item => ({
+                    ...item,
+                    total_balance: item.total_balance * (selectedTotal / totalBalance)
+                })));
+                
+                // Update client table with selected accounts total
+                updateClientTable([{ 
+                    client_name: data.client_balance.client_name, 
+                    client_id: data.client_balance.client_id, 
+                    total_balance: selectedTotal,
+                    qtd_change: data.fund_balance.qtd_change,
+                    ytd_change: data.fund_balance.ytd_change
+                }]);
+                
+                // Update fund table to show only the selected fund with selected accounts total
+                updateFundTable([{
+                    fund_name: fundName,
+                    total_balance: selectedTotal,
+                    account_count: selectedAccountIds.length,
+                    qtd_change: data.fund_balance.qtd_change,
+                    ytd_change: data.fund_balance.ytd_change
+                }]);
+            } else {
+                // No specific accounts selected, show all data for client-fund
+                updateRecentChart(data.recent_history);
+                updateLongTermChart(data.long_term_history);
+                
+                updateClientTable([{ 
+                    client_name: data.client_balance.client_name, 
+                    client_id: data.client_balance.client_id, 
+                    total_balance: data.client_balance.total_balance,
+                    qtd_change: data.fund_balance.qtd_change,
+                    ytd_change: data.fund_balance.ytd_change
+                }]);
+                
+                // Show only the selected fund
+                updateFundTable([{
+                    fund_name: fundName,
+                    total_balance: data.fund_balance.total_balance,
+                    account_count: data.account_details.length,
+                    qtd_change: data.fund_balance.qtd_change,
+                    ytd_change: data.fund_balance.ytd_change
+                }]);
+            }
+            
+            // Show filtered accounts (only for this client-fund combination)
+            updateAccountTable(data.account_details);
+            updateKPICards(data);
+            
+            // Restore visual selections
+            restoreSelectionVisuals();
+        } else {
+            // For other complex selections, load overview and filter client-side
+            await loadOverviewData();
+            
+            // Apply client-side filtering
+            // This is a placeholder - would need proper implementation for other cases
+        }
+    } catch (error) {
+        console.error('Error loading filtered data:', error);
+        // Fallback to overview on error
+        await loadOverviewData();
+    }
 }
 
 // Load client-fund combination data
