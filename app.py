@@ -138,7 +138,7 @@ def get_overview():
                 SUM(ab.balance) as current_balance,
                 COUNT(DISTINCT ab.account_id) as account_count
             FROM account_balances ab
-            JOIN funds f ON ab.fund_name = f.fund_name
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
             WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
             GROUP BY ab.fund_name, f.fund_ticker
         ),
@@ -305,7 +305,7 @@ def get_client_data(client_id):
                 COUNT(DISTINCT ab.account_id) as account_count
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
-            JOIN funds f ON ab.fund_name = f.fund_name
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
             WHERE cm.client_id = ? AND ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
             GROUP BY ab.fund_name, f.fund_ticker
         ),
@@ -951,7 +951,7 @@ def get_date_data(date_string):
                 SUM(ab.balance) as current_balance,
                 COUNT(DISTINCT ab.account_id) as account_count
             FROM account_balances ab
-            JOIN funds f ON ab.fund_name = f.fund_name
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
             WHERE ab.balance_date = ?
             GROUP BY ab.fund_name, f.fund_ticker
         ),
