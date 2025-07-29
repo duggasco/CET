@@ -747,19 +747,20 @@ body.mobile .table-wrapper {
 
 body.mobile table {
     min-width: 100%;
-    font-size: 10px;
+    font-size: 8px;
 }
 
 body.mobile th {
-    padding: 6px 8px;
-    font-size: 9px;
+    padding: 4px 6px;
+    font-size: 8px;
     white-space: nowrap;
+    letter-spacing: 0;
 }
 
 body.mobile td {
-    padding: 6px 8px;
+    padding: 4px 6px;
     white-space: nowrap;
-    font-size: 10px;
+    font-size: 8px;
 }
 
 /* Mobile Column Adjustments */
@@ -768,14 +769,19 @@ body.mobile #clientTable td:nth-child(1),
 body.mobile #fundTable th:nth-child(1),
 body.mobile #fundTable td:nth-child(1) {
     width: auto;
-    min-width: 150px;
+    min-width: 120px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 body.mobile #accountTable th:nth-child(1),
 body.mobile #accountTable td:nth-child(1) {
-    font-size: 9px;
+    font-size: 7px;
     width: auto;
-    min-width: 100px;
+    min-width: 80px;
+    max-width: 100px;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 
 body.mobile #clientTable th:nth-child(2),
@@ -785,7 +791,8 @@ body.mobile #fundTable td:nth-child(2),
 body.mobile #accountTable th:nth-child(2),
 body.mobile #accountTable td:nth-child(2) {
     width: auto;
-    min-width: 100px;
+    min-width: 80px;
+    max-width: 100px;
 }
 
 body.mobile #clientTable th:nth-child(3),
@@ -801,12 +808,13 @@ body.mobile #accountTable td:nth-child(3),
 body.mobile #accountTable th:nth-child(4),
 body.mobile #accountTable td:nth-child(4) {
     width: auto;
-    min-width: 60px;
+    min-width: 45px;
+    max-width: 60px;
 }
 
 /* Mobile Touch Enhancements */
 body.mobile tbody tr {
-    min-height: 36px;
+    min-height: 28px;
 }
 
 body.mobile tbody tr:hover {
@@ -882,11 +890,47 @@ body.mobile .table-wrapper thead {
 
 /* Mobile-friendly number formatting */
 body.mobile .number {
-    font-size: 9px;
+    font-size: 8px;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 
 /* Ensure charts are not too tall on mobile */
 body.mobile #recentChart,
 body.mobile #longTermChart {
     max-height: 180px !important;
+}
+
+/* Additional mobile table optimizations */
+body.mobile .table-wrapper {
+    font-size: 8px;
+}
+
+/* Ensure table doesn't stretch too wide */
+body.mobile table {
+    table-layout: auto;
+    width: auto;
+    min-width: 100%;
+}
+
+/* Make percentage signs smaller */
+body.mobile .positive::before,
+body.mobile .negative::before {
+    font-size: 7px;
+}
+
+/* Compact selected row styling */
+body.mobile tbody tr.selected td:first-child {
+    padding-left: 7px;
+}
+
+/* Reduce header height on mobile */
+body.mobile th {
+    height: 24px;
+    line-height: 16px;
+}
+
+/* Reduce row height */
+body.mobile td {
+    height: 24px;
+    line-height: 16px;
 }
