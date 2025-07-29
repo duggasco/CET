@@ -183,45 +183,44 @@ def get_overview():
     cursor.execute(query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
     fund_balances = [dict(row) for row in cursor.fetchall()]
     
-    # Get account details with QTD and YTD
+    # Get account details with QTD and YTD - aggregated at account level
     query = '''
         WITH current_balances AS (
             SELECT 
                 ab.account_id,
                 cm.client_name,
-                ab.fund_name,
-                ab.balance as current_balance
+                SUM(ab.balance) as current_balance
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            GROUP BY ab.account_id, cm.client_name
         ),
         qtd_start_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as qtd_start_balance
+                SUM(ab.balance) as qtd_start_balance
             FROM account_balances ab
             WHERE ab.balance_date = (
                 SELECT MAX(balance_date) FROM account_balances 
                 WHERE balance_date <= ?
             )
+            GROUP BY ab.account_id
         ),
         ytd_start_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as ytd_start_balance
+                SUM(ab.balance) as ytd_start_balance
             FROM account_balances ab
             WHERE ab.balance_date = (
                 SELECT MAX(balance_date) FROM account_balances 
                 WHERE balance_date <= ?
             )
+            GROUP BY ab.account_id
         )
         SELECT 
             cb.account_id,
             cb.client_name,
-            cb.fund_name,
-            cb.current_balance as balance,
+            cb.current_balance as total_balance,
             CASE 
                 WHEN qsb.qtd_start_balance IS NULL OR qsb.qtd_start_balance = 0 THEN 0
                 ELSE ((cb.current_balance - qsb.qtd_start_balance) / qsb.qtd_start_balance) * 100
@@ -231,8 +230,8 @@ def get_overview():
                 ELSE ((cb.current_balance - ysb.ytd_start_balance) / ysb.ytd_start_balance) * 100
             END as ytd_change
         FROM current_balances cb
-        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id AND cb.fund_name = qsb.fund_name
-        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id AND cb.fund_name = ysb.fund_name
+        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
+        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
         ORDER BY cb.current_balance DESC
     '''
     
@@ -350,45 +349,44 @@ def get_client_data(client_id):
     cursor.execute(query, (client_id, client_id, qtd_start.strftime('%Y-%m-%d'), client_id, ytd_start.strftime('%Y-%m-%d')))
     fund_balances = [dict(row) for row in cursor.fetchall()]
     
-    # Get client's account details with QTD and YTD
+    # Get client's account details with QTD and YTD - aggregated at account level
     query = '''
         WITH current_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as current_balance
+                SUM(ab.balance) as current_balance
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             WHERE cm.client_id = ? AND ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            GROUP BY ab.account_id
         ),
         qtd_start_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as qtd_start_balance
+                SUM(ab.balance) as qtd_start_balance
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             WHERE cm.client_id = ? AND ab.balance_date = (
                 SELECT MAX(balance_date) FROM account_balances 
                 WHERE balance_date <= ?
             )
+            GROUP BY ab.account_id
         ),
         ytd_start_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as ytd_start_balance
+                SUM(ab.balance) as ytd_start_balance
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             WHERE cm.client_id = ? AND ab.balance_date = (
                 SELECT MAX(balance_date) FROM account_balances 
                 WHERE balance_date <= ?
             )
+            GROUP BY ab.account_id
         )
         SELECT 
             cb.account_id,
-            cb.fund_name,
-            cb.current_balance as balance,
+            cb.current_balance as total_balance,
             CASE 
                 WHEN qsb.qtd_start_balance IS NULL OR qsb.qtd_start_balance = 0 THEN 0
                 ELSE ((cb.current_balance - qsb.qtd_start_balance) / qsb.qtd_start_balance) * 100
@@ -398,8 +396,8 @@ def get_client_data(client_id):
                 ELSE ((cb.current_balance - ysb.ytd_start_balance) / ysb.ytd_start_balance) * 100
             END as ytd_change
         FROM current_balances cb
-        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id AND cb.fund_name = qsb.fund_name
-        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id AND cb.fund_name = ysb.fund_name
+        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
+        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
         ORDER BY cb.current_balance DESC
     '''
     
@@ -985,45 +983,44 @@ def get_date_data(date_string):
     cursor.execute(query, (date_string, qtd_comparison_date.strftime('%Y-%m-%d'), ytd_comparison_date.strftime('%Y-%m-%d')))
     fund_balances = [dict(row) for row in cursor.fetchall()]
     
-    # Get account details for the selected date with QTD and YTD
+    # Get account details for the selected date with QTD and YTD - aggregated at account level
     query = '''
         WITH current_balances AS (
             SELECT 
                 ab.account_id,
                 cm.client_name,
-                ab.fund_name,
-                ab.balance as current_balance
+                SUM(ab.balance) as current_balance
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             WHERE ab.balance_date = ?
+            GROUP BY ab.account_id, cm.client_name
         ),
         qtd_start_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as qtd_start_balance
+                SUM(ab.balance) as qtd_start_balance
             FROM account_balances ab
             WHERE ab.balance_date = (
                 SELECT MAX(balance_date) FROM account_balances 
                 WHERE balance_date <= ?
             )
+            GROUP BY ab.account_id
         ),
         ytd_start_balances AS (
             SELECT 
                 ab.account_id,
-                ab.fund_name,
-                ab.balance as ytd_start_balance
+                SUM(ab.balance) as ytd_start_balance
             FROM account_balances ab
             WHERE ab.balance_date = (
                 SELECT MAX(balance_date) FROM account_balances 
                 WHERE balance_date <= ?
             )
+            GROUP BY ab.account_id
         )
         SELECT 
             cb.account_id,
             cb.client_name,
-            cb.fund_name,
-            cb.current_balance as balance,
+            cb.current_balance as total_balance,
             CASE 
                 WHEN qsb.qtd_start_balance IS NULL OR qsb.qtd_start_balance = 0 THEN 0
                 ELSE ((cb.current_balance - qsb.qtd_start_balance) / qsb.qtd_start_balance) * 100
@@ -1033,8 +1030,8 @@ def get_date_data(date_string):
                 ELSE ((cb.current_balance - ysb.ytd_start_balance) / ysb.ytd_start_balance) * 100
             END as ytd_change
         FROM current_balances cb
-        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id AND cb.fund_name = qsb.fund_name
-        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id AND cb.fund_name = ysb.fund_name
+        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
+        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
         ORDER BY cb.current_balance DESC
     '''
     cursor.execute(query, (date_string, qtd_comparison_date.strftime('%Y-%m-%d'), ytd_comparison_date.strftime('%Y-%m-%d')))

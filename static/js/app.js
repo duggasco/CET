@@ -1643,14 +1643,35 @@ async function loadFilteredData() {
             // Always show all clients and funds for selection capability
             if (allData) {
                 updateClientTable(allData.client_balances);
-                updateFundTable(allData.fund_balances);
+                
+                // For funds, we need to show ALL funds but with balances from selected accounts only
+                const allFundsWithSelectedBalances = allData.fund_balances.map(fund => {
+                    const selectedBalance = fundMap.get(fund.fund_name);
+                    if (selectedBalance) {
+                        // This fund has balance in selected accounts
+                        return selectedBalance;
+                    } else {
+                        // This fund has no balance in selected accounts, show with 0
+                        return {
+                            ...fund,
+                            total_balance: 0,
+                            account_count: 0
+                        };
+                    }
+                });
+                updateFundTable(allFundsWithSelectedBalances);
             } else {
                 // Fallback if allData not available
                 updateClientTable(Array.from(clientMap.values()));
                 updateFundTable(Array.from(fundMap.values()));
             }
             
-            updateAccountTable(Array.from(accountsMap.values()));
+            // Show ALL accounts like we do for clients and funds
+            if (allData && allData.account_details) {
+                updateAccountTable(allData.account_details);
+            } else {
+                updateAccountTable(Array.from(accountsMap.values()));
+            }
             updateKPICards({
                 client_balances: Array.from(clientMap.values()),
                 fund_balances: Array.from(fundMap.values()),
