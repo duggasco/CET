@@ -24,6 +24,80 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def apply_text_filters(data_list, fund_ticker_filter='', client_name_filter='', account_number_filter=''):
+    """Apply text filters to a list of data items"""
+    if not fund_ticker_filter and not client_name_filter and not account_number_filter:
+        return data_list
+    
+    filtered = []
+    for item in data_list:
+        match = True
+        
+        # Filter by fund ticker
+        if fund_ticker_filter:
+            fund_ticker = item.get('fund_ticker', '')
+            fund_name = item.get('fund_name', '')
+            if fund_ticker or fund_name:
+                match = match and (
+                    fund_ticker_filter.lower() in fund_ticker.lower() or
+                    fund_ticker_filter.lower() in fund_name.lower()
+                )
+            else:
+                # For account_details, we can't filter by fund since they don't have fund info
+                # So we keep them all when fund filter is applied
+                pass
+        
+        # Filter by client name
+        if client_name_filter and match:
+            client_name = item.get('client_name', '')
+            if client_name:
+                match = match and client_name_filter.lower() in client_name.lower()
+            else:
+                # If item has no client info but filter is specified, skip it
+                match = False
+        
+        # Filter by account number
+        if account_number_filter and match:
+            account_id = item.get('account_id', '')
+            if account_id:
+                match = match and account_number_filter.lower() in account_id.lower()
+            else:
+                # If item has no account info but filter is specified, skip it
+                match = False
+        
+        if match:
+            filtered.append(item)
+    
+    return filtered
+
+def get_text_filters():
+    """Get text filter parameters from request"""
+    return {
+        'fund_ticker_filter': request.args.get('fund_ticker', '').strip(),
+        'client_name_filter': request.args.get('client_name', '').strip(),
+        'account_number_filter': request.args.get('account_number', '').strip()
+    }
+
+def apply_filters_to_response(data):
+    """Apply text filters to all data arrays in a response"""
+    filters = get_text_filters()
+    
+    # Only apply filters if at least one is specified
+    if not any(filters.values()):
+        return data
+    
+    # Apply filters to each data type if present
+    if 'client_balances' in data:
+        data['client_balances'] = apply_text_filters(data['client_balances'], **filters)
+    
+    if 'fund_balances' in data:
+        data['fund_balances'] = apply_text_filters(data['fund_balances'], **filters)
+    
+    if 'account_details' in data:
+        data['account_details'] = apply_text_filters(data['account_details'], **filters)
+    
+    return data
+
 @app.route('/')
 def index():
     # Generate cache bust parameter based on current timestamp
@@ -34,6 +108,7 @@ def index():
 def get_overview():
     conn = get_db_connection()
     cursor = conn.cursor()
+    
     
     # Get aggregated balance over time for different periods
     end_date = (datetime.now() - timedelta(days=1)).date()  # Yesterday
@@ -243,18 +318,22 @@ def get_overview():
     
     conn.close()
     
-    return jsonify({
+    # Build response and apply filters
+    response_data = {
         'recent_history': recent_history,
         'long_term_history': long_term_history,
         'client_balances': client_balances,
         'fund_balances': fund_balances,
         'account_details': account_details
-    })
+    }
+    
+    return jsonify(apply_filters_to_response(response_data))
 
 @app.route('/api/client/<client_id>')
 def get_client_data(client_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
     
     # Get client balance history for different periods
     end_date = (datetime.now() - timedelta(days=1)).date()  # Yesterday
@@ -412,17 +491,21 @@ def get_client_data(client_id):
     
     conn.close()
     
-    return jsonify({
+    # Build response and apply filters
+    response_data = {
         'recent_history': recent_history,
         'long_term_history': long_term_history,
         'fund_balances': fund_balances,
         'account_details': account_details
-    })
+    }
+    
+    return jsonify(apply_filters_to_response(response_data))
 
 @app.route('/api/fund/<fund_name>')
 def get_fund_data(fund_name):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
     
     # Get fund balance history for different periods
     end_date = (datetime.now() - timedelta(days=1)).date()  # Yesterday
@@ -579,13 +662,16 @@ def get_fund_data(fund_name):
     
     conn.close()
     
-    return jsonify({
+    # Build response and apply filters
+    response_data = {
         'fund_info': fund_info,
         'recent_history': recent_history,
         'long_term_history': long_term_history,
         'client_balances': client_balances,
         'account_details': account_details
-    })
+    }
+    
+    return jsonify(apply_filters_to_response(response_data))
 
 @app.route('/api/account/<account_id>')
 @app.route('/api/account/<account_id>/fund/<fund_name>')
@@ -667,11 +753,14 @@ def get_account_data(account_id, fund_name=None):
     
     conn.close()
     
-    return jsonify({
+    # Build response and apply filters
+    response_data = {
         'recent_history': recent_history,
         'long_term_history': long_term_history,
         'fund_allocation': fund_allocation
-    })
+    }
+    
+    return jsonify(apply_filters_to_response(response_data))
 
 @app.route('/api/client/<client_id>/fund/<fund_name>')
 def get_client_fund_data(client_id, fund_name):

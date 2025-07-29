@@ -46,6 +46,23 @@ function applyMobileClass() {
     }
 }
 
+// Build query string with text filters
+function buildQueryString() {
+    const params = new URLSearchParams();
+    
+    if (textFilters.fundTicker) {
+        params.append('fund_ticker', textFilters.fundTicker);
+    }
+    if (textFilters.clientName) {
+        params.append('client_name', textFilters.clientName);
+    }
+    if (textFilters.accountNumber) {
+        params.append('account_number', textFilters.accountNumber);
+    }
+    
+    return params.toString() ? '?' + params.toString() : '';
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     applyMobileClass();
@@ -72,28 +89,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Filter all data arrays in the response object
-function filterAllData(data) {
-    const filtered = { ...data };
-    
-    // Filter each data array if it exists
-    if (filtered.client_balances) {
-        filtered.client_balances = applyTextFiltersToData(filtered.client_balances, 'client');
-    }
-    if (filtered.fund_balances) {
-        filtered.fund_balances = applyTextFiltersToData(filtered.fund_balances, 'fund');
-    }
-    if (filtered.account_details) {
-        filtered.account_details = applyTextFiltersToData(filtered.account_details, 'account');
-    }
-    
-    return filtered;
-}
-
 // Update KPI cards with data based on current filter context
 function updateKPICards(data) {
-    // Apply text filters to the data
-    const filteredData = filterAllData(data);
+    // Data is already filtered server-side
+    const filteredData = data;
     
     // Calculate Total AUM from filtered data
     let totalAUM = 0;
@@ -550,7 +549,7 @@ function initializeCharts() {
 // Load overview data
 async function loadOverviewData() {
     try {
-        const response = await fetch('/api/overview');
+        const response = await fetch('/api/overview' + buildQueryString());
         const data = await response.json();
         allData = data;
         
@@ -573,7 +572,7 @@ async function loadOverviewData() {
 // Load data for a specific date
 async function loadDateData(dateString) {
     try {
-        const response = await fetch(`/api/date/${dateString}`);
+        const response = await fetch(`/api/date/${dateString}` + buildQueryString());
         const data = await response.json();
         
         currentFilter = { type: 'date', value: dateString };
@@ -599,7 +598,7 @@ async function loadDateData(dateString) {
 // Load client-specific data
 async function loadClientData(clientId, clientName) {
     try {
-        const response = await fetch(`/api/client/${clientId}`);
+        const response = await fetch(`/api/client/${clientId}` + buildQueryString());
         const data = await response.json();
         
         currentFilter = { type: 'client', value: clientId, name: clientName };
@@ -631,7 +630,7 @@ async function loadClientData(clientId, clientName) {
 // Load fund-specific data
 async function loadFundData(fundName) {
     try {
-        const response = await fetch(`/api/fund/${encodeURIComponent(fundName)}`);
+        const response = await fetch(`/api/fund/${encodeURIComponent(fundName)}` + buildQueryString());
         const data = await response.json();
         
         currentFilter = { type: 'fund', value: fundName };
@@ -662,7 +661,7 @@ async function loadFundData(fundName) {
 // Load account-specific data
 async function loadAccountData(accountId) {
     try {
-        const response = await fetch(`/api/account/${encodeURIComponent(accountId)}`);
+        const response = await fetch(`/api/account/${encodeURIComponent(accountId)}` + buildQueryString());
         const data = await response.json();
         
         currentFilter = { type: 'account', value: accountId };
@@ -714,19 +713,19 @@ async function loadAccountData(accountId) {
             const selectedFundName = Array.from(selectionState.funds)[0];
             
             // Fetch the filtered account list
-            const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}`);
+            const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const filteredData = await filteredResponse.json();
             updateAccountTable(filteredData.account_details);
         } else if (selectionState.clients.size > 0) {
             // If only client is selected, show accounts for that client
             const selectedClientId = Array.from(selectionState.clients)[0];
-            const clientResponse = await fetch(`/api/client/${selectedClientId}`);
+            const clientResponse = await fetch(`/api/client/${selectedClientId}` + buildQueryString());
             const clientData = await clientResponse.json();
             updateAccountTable(clientData.account_details);
         } else if (selectionState.funds.size > 0) {
             // If only fund is selected, show accounts for that fund
             const selectedFundName = Array.from(selectionState.funds)[0];
-            const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}`);
+            const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const fundData = await fundResponse.json();
             updateAccountTable(fundData.account_details);
         } else {
@@ -749,7 +748,7 @@ async function loadAccountData(accountId) {
 // Load account data filtered by fund
 async function loadAccountDataForFund(accountId, fundName) {
     try {
-        const response = await fetch(`/api/account/${encodeURIComponent(accountId)}/fund/${encodeURIComponent(fundName)}`);
+        const response = await fetch(`/api/account/${encodeURIComponent(accountId)}/fund/${encodeURIComponent(fundName)}` + buildQueryString());
         const data = await response.json();
         
         currentFilter = { type: 'account-fund', accountId, fundName };
@@ -800,13 +799,13 @@ async function loadAccountDataForFund(accountId, fundName) {
             const selectedFundName = Array.from(selectionState.funds)[0];
             
             // Fetch the filtered account list
-            const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}`);
+            const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const filteredData = await filteredResponse.json();
             updateAccountTable(filteredData.account_details);
         } else if (selectionState.funds.size > 0) {
             // If only fund is selected, show accounts for that fund
             const selectedFundName = Array.from(selectionState.funds)[0];
-            const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}`);
+            const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const fundData = await fundResponse.json();
             updateAccountTable(fundData.account_details);
         } else {
@@ -1055,32 +1054,6 @@ function sampleDataPoints(data, maxPoints) {
 }
 
 // Filter data based on text filters
-function applyTextFiltersToData(data, type) {
-    if (!textFilters.fundTicker && !textFilters.clientName && !textFilters.accountNumber) {
-        return data;
-    }
-    
-    return data.filter(item => {
-        let match = true;
-        
-        // Filter by fund ticker
-        if (textFilters.fundTicker && item.fund_ticker) {
-            match = match && item.fund_ticker.toLowerCase().includes(textFilters.fundTicker.toLowerCase());
-        }
-        
-        // Filter by client name
-        if (textFilters.clientName && item.client_name) {
-            match = match && item.client_name.toLowerCase().includes(textFilters.clientName.toLowerCase());
-        }
-        
-        // Filter by account number
-        if (textFilters.accountNumber && item.account_id) {
-            match = match && item.account_id.toLowerCase().includes(textFilters.accountNumber.toLowerCase());
-        }
-        
-        return match;
-    });
-}
 
 // Update client table
 function updateClientTable(data) {
@@ -1426,7 +1399,7 @@ async function loadFilteredData() {
             const clientName = document.querySelector(`#clientTable tr[data-client-id="${clientId}"] td:first-child`)?.textContent || '';
             
             // Load client-fund data to maintain filtering
-            const response = await fetch(`/api/client/${clientId}/fund/${encodeURIComponent(fundName)}`);
+            const response = await fetch(`/api/client/${clientId}/fund/${encodeURIComponent(fundName)}` + buildQueryString());
             const data = await response.json();
             
             currentFilter = { type: 'client-fund-multi-account', clientId, clientName, fundName };
@@ -2029,7 +2002,7 @@ async function loadFilteredData() {
 // Load client-fund combination data
 async function loadClientFundData(clientId, clientName, fundName) {
     try {
-        const response = await fetch(`/api/client/${clientId}/fund/${encodeURIComponent(fundName)}`);
+        const response = await fetch(`/api/client/${clientId}/fund/${encodeURIComponent(fundName)}` + buildQueryString());
         const data = await response.json();
         
         currentFilter = { type: 'client-fund', clientId, clientName, fundName };
@@ -2047,7 +2020,7 @@ async function loadClientFundData(clientId, clientName, fundName) {
         }]);
         
         // Show all funds for this client
-        const clientResponse = await fetch(`/api/client/${clientId}`);
+        const clientResponse = await fetch(`/api/client/${clientId}` + buildQueryString());
         const clientData = await clientResponse.json();
         updateFundTable(clientData.fund_balances);
         
