@@ -127,11 +127,68 @@ run_with_venv() {
         fi
     fi
     
-    # Run the application
-    echo -e "${YELLOW}Starting Flask application...${NC}"
+    # Create logs directory if it doesn't exist
+    if [ ! -d "logs" ]; then
+        mkdir -p logs
+    fi
+    
+    # Define log file with timestamp
+    LOG_FILE="logs/${APP_NAME}_$(date +%Y%m%d_%H%M%S).log"
+    
+    # Run the application in background with logging
+    echo -e "${YELLOW}Starting Flask application in background...${NC}"
     echo -e "${BLUE}Application will run at: http://localhost:${PORT}${NC}"
+    
+    # Start the application in background and save PID
+    nohup env FLASK_PORT=${PORT} python app.py > "${LOG_FILE}" 2>&1 &
+    APP_PID=$!
+    
+    # Save PID to file for stop function
+    echo $APP_PID > "${APP_NAME}.pid"
+    
+    # Check if process started successfully
+    sleep 2
+    if kill -0 $APP_PID 2>/dev/null; then
+        echo -e "${GREEN}✓ Application started successfully (PID: $APP_PID)${NC}"
+        echo ""
+        echo "To view logs: tail -f ${LOG_FILE}"
+        echo "To stop: ./run.sh --stop"
+    else
+        echo -e "${RED}✗ Failed to start application${NC}"
+        echo "Check logs: cat ${LOG_FILE}"
+        exit 1
+    fi
+}
+
+# Function to view logs
+view_logs() {
+    echo -e "${BLUE}=== Client Exploration Tool Logs ===${NC}"
     echo ""
-    FLASK_PORT=${PORT} python app.py
+    
+    # Check if Docker container is running
+    if command_exists docker && docker ps | grep -q "${APP_NAME}"; then
+        echo -e "${YELLOW}Viewing Docker container logs...${NC}"
+        echo "Press Ctrl+C to stop viewing logs"
+        echo ""
+        docker logs -f "${APP_NAME}"
+    else
+        # Check for native logs
+        if [ -d "logs" ]; then
+            # Find the most recent log file
+            LATEST_LOG=$(ls -t logs/${APP_NAME}_*.log 2>/dev/null | head -1)
+            if [ -n "$LATEST_LOG" ]; then
+                echo -e "${YELLOW}Viewing native application logs...${NC}"
+                echo "Log file: $LATEST_LOG"
+                echo "Press Ctrl+C to stop viewing logs"
+                echo ""
+                tail -f "$LATEST_LOG"
+            else
+                echo -e "${YELLOW}No log files found in logs/ directory${NC}"
+            fi
+        else
+            echo -e "${YELLOW}No logs directory found${NC}"
+        fi
+    fi
 }
 
 # Function to stop the application
@@ -154,7 +211,24 @@ stop_application() {
         # Check for native Python process
         echo -e "${YELLOW}Looking for native Python process...${NC}"
         
-        # Find process running on the port
+        # First check PID file
+        if [ -f "${APP_NAME}.pid" ]; then
+            PID=$(cat "${APP_NAME}.pid")
+            if kill -0 $PID 2>/dev/null; then
+                echo "Found process from PID file: $PID"
+                if kill -15 $PID 2>/dev/null; then
+                    echo -e "${GREEN}✓ Process $PID stopped${NC}"
+                    rm -f "${APP_NAME}.pid"
+                else
+                    echo -e "${RED}✗ Failed to stop process $PID${NC}"
+                fi
+            else
+                echo -e "${YELLOW}Process in PID file no longer running${NC}"
+                rm -f "${APP_NAME}.pid"
+            fi
+        fi
+        
+        # Also check for processes on the port
         if command_exists lsof; then
             PID=$(lsof -ti:${PORT} 2>/dev/null)
         elif command_exists netstat; then
@@ -165,7 +239,7 @@ stop_application() {
         fi
         
         if [ -n "$PID" ]; then
-            echo "Found process(es) on port ${PORT}: $PID"
+            echo "Found additional process(es) on port ${PORT}: $PID"
             for pid in $PID; do
                 if kill -15 $pid 2>/dev/null; then
                     echo -e "${GREEN}✓ Process $pid stopped${NC}"
@@ -173,8 +247,8 @@ stop_application() {
                     echo -e "${YELLOW}Process $pid may have already stopped${NC}"
                 fi
             done
-        else
-            echo -e "${YELLOW}No running process found on port ${PORT}${NC}"
+        elif [ ! -f "${APP_NAME}.pid" ]; then
+            echo -e "${YELLOW}No running process found${NC}"
         fi
     fi
     
@@ -192,6 +266,7 @@ show_help() {
     echo "  --build     Build/rebuild only (Docker mode)"
     echo "  --port PORT Specify custom port (default: ${DEFAULT_PORT})"
     echo "  --stop      Stop the running application"
+    echo "  --logs      View application logs (tail -f)"
     echo "  --help      Show this help message"
     echo ""
     echo "Examples:"
@@ -201,6 +276,7 @@ show_help() {
     echo "  ./run.sh --venv 8000        # Venv deployment on port 8000"
     echo "  ./run.sh --stop             # Stop running application"
     echo "  ./run.sh --stop --port 8080 # Stop application on port 8080"
+    echo "  ./run.sh --logs             # View application logs"
     echo ""
     echo "By default, the script will:"
     echo "  1. Check if Docker is available and use it if found"
@@ -213,6 +289,7 @@ FORCE_DOCKER=false
 FORCE_VENV=false
 BUILD_ONLY=false
 STOP_APP=false
+VIEW_LOGS=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -230,6 +307,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --stop)
             STOP_APP=true
+            shift
+            ;;
+        --logs)
+            VIEW_LOGS=true
             shift
             ;;
         --port)
@@ -262,6 +343,8 @@ done
 # Main execution logic
 if [ "$STOP_APP" = true ]; then
     stop_application
+elif [ "$VIEW_LOGS" = true ]; then
+    view_logs
 elif [ "$FORCE_VENV" = true ]; then
     run_with_venv
 elif [ "$FORCE_DOCKER" = true ]; then

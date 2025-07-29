@@ -23,6 +23,9 @@ instance/
 *.log
 logs/
 
+# Process files
+*.pid
+
 # IDE
 .vscode/
 .idea/
