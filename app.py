@@ -133,12 +133,14 @@ def get_overview():
     query = '''
         WITH current_balances AS (
             SELECT 
-                fund_name,
-                SUM(balance) as current_balance,
-                COUNT(DISTINCT account_id) as account_count
-            FROM account_balances
-            WHERE balance_date = (SELECT MAX(balance_date) FROM account_balances)
-            GROUP BY fund_name
+                ab.fund_name,
+                f.fund_ticker,
+                SUM(ab.balance) as current_balance,
+                COUNT(DISTINCT ab.account_id) as account_count
+            FROM account_balances ab
+            JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            GROUP BY ab.fund_name, f.fund_ticker
         ),
         qtd_start_balances AS (
             SELECT 
@@ -164,6 +166,7 @@ def get_overview():
         )
         SELECT 
             cb.fund_name,
+            cb.fund_ticker,
             cb.current_balance as total_balance,
             cb.account_count,
             CASE 
@@ -297,12 +300,14 @@ def get_client_data(client_id):
         WITH current_balances AS (
             SELECT 
                 ab.fund_name,
+                f.fund_ticker,
                 SUM(ab.balance) as current_balance,
                 COUNT(DISTINCT ab.account_id) as account_count
             FROM account_balances ab
             JOIN client_mapping cm ON ab.account_id = cm.account_id
+            JOIN funds f ON ab.fund_name = f.fund_name
             WHERE cm.client_id = ? AND ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
-            GROUP BY ab.fund_name
+            GROUP BY ab.fund_name, f.fund_ticker
         ),
         qtd_start_balances AS (
             SELECT 
@@ -330,6 +335,7 @@ def get_client_data(client_id):
         )
         SELECT 
             cb.fund_name,
+            cb.fund_ticker,
             cb.current_balance as total_balance,
             cb.account_count,
             CASE 
@@ -566,9 +572,15 @@ def get_fund_data(fund_name):
     cursor.execute(query, (fund_name, fund_name, qtd_start.strftime('%Y-%m-%d'), fund_name, ytd_start.strftime('%Y-%m-%d')))
     account_details = [dict(row) for row in cursor.fetchall()]
     
+    # Get fund info with ticker
+    cursor.execute('SELECT fund_name, fund_ticker FROM funds WHERE fund_name = ?', (fund_name,))
+    fund_row = cursor.fetchone()
+    fund_info = dict(fund_row) if fund_row else {'fund_name': fund_name, 'fund_ticker': None}
+    
     conn.close()
     
     return jsonify({
+        'fund_info': fund_info,
         'recent_history': recent_history,
         'long_term_history': long_term_history,
         'client_balances': client_balances,
@@ -934,12 +946,14 @@ def get_date_data(date_string):
     query = '''
         WITH current_balances AS (
             SELECT 
-                fund_name,
-                SUM(balance) as current_balance,
-                COUNT(DISTINCT account_id) as account_count
-            FROM account_balances
-            WHERE balance_date = ?
-            GROUP BY fund_name
+                ab.fund_name,
+                f.fund_ticker,
+                SUM(ab.balance) as current_balance,
+                COUNT(DISTINCT ab.account_id) as account_count
+            FROM account_balances ab
+            JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = ?
+            GROUP BY ab.fund_name, f.fund_ticker
         ),
         qtd_start_balances AS (
             SELECT 
@@ -965,6 +979,7 @@ def get_date_data(date_string):
         )
         SELECT 
             cb.fund_name,
+            cb.fund_ticker,
             cb.current_balance as total_balance,
             cb.account_count,
             CASE 

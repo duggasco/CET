@@ -28,6 +28,14 @@ def create_database():
         )
     ''')
     
+    # Create funds table for fund metadata
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS funds (
+            fund_name TEXT PRIMARY KEY,
+            fund_ticker TEXT UNIQUE NOT NULL
+        )
+    ''')
+    
     # Create indexes for better performance
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_account_balances_date ON account_balances(balance_date)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_account_balances_account ON account_balances(account_id)')
@@ -43,6 +51,7 @@ def generate_sample_data():
     # Clear existing data
     cursor.execute('DELETE FROM account_balances')
     cursor.execute('DELETE FROM client_mapping')
+    cursor.execute('DELETE FROM funds')
     
     # Sample clients and funds
     clients = [
@@ -56,6 +65,23 @@ def generate_sample_data():
         'Government Money Market', 'Prime Money Market', 'Treasury Fund',
         'Municipal Money Market', 'Corporate Bond Fund', 'Institutional Fund'
     ]
+    
+    # Fund tickers mapping
+    fund_tickers = {
+        'Government Money Market': 'GMMF',
+        'Prime Money Market': 'PMMF',
+        'Treasury Fund': 'TRSF',
+        'Municipal Money Market': 'MUNF',
+        'Corporate Bond Fund': 'CBND',
+        'Institutional Fund': 'INST'
+    }
+    
+    # Insert fund data
+    for fund_name, ticker in fund_tickers.items():
+        cursor.execute(
+            'INSERT INTO funds (fund_name, fund_ticker) VALUES (?, ?)',
+            (fund_name, ticker)
+        )
     
     # Generate client mapping and fund allocations
     account_client_map = {}
