@@ -747,18 +747,19 @@ body.mobile .table-wrapper {
 
 body.mobile table {
     min-width: 100%;
-    font-size: 12px;
+    font-size: 10px;
 }
 
 body.mobile th {
-    padding: 8px 12px;
-    font-size: 11px;
+    padding: 6px 8px;
+    font-size: 9px;
     white-space: nowrap;
 }
 
 body.mobile td {
-    padding: 10px 12px;
+    padding: 6px 8px;
     white-space: nowrap;
+    font-size: 10px;
 }
 
 /* Mobile Column Adjustments */
@@ -772,7 +773,7 @@ body.mobile #fundTable td:nth-child(1) {
 
 body.mobile #accountTable th:nth-child(1),
 body.mobile #accountTable td:nth-child(1) {
-    font-size: 10px;
+    font-size: 9px;
     width: auto;
     min-width: 100px;
 }
@@ -805,7 +806,7 @@ body.mobile #accountTable td:nth-child(4) {
 
 /* Mobile Touch Enhancements */
 body.mobile tbody tr {
-    min-height: 44px;
+    min-height: 36px;
 }
 
 body.mobile tbody tr:hover {
@@ -881,7 +882,7 @@ body.mobile .table-wrapper thead {
 
 /* Mobile-friendly number formatting */
 body.mobile .number {
-    font-size: 11px;
+    font-size: 9px;
 }
 
 /* Ensure charts are not too tall on mobile */
