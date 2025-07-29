@@ -16,10 +16,15 @@ pip install -r requirements.txt
 # Generate sample data
 python database.py
 
-# Run application
+# Run application (default port 9095)
 ./run.sh
-# or
-python app.py
+
+# Run with custom port
+./run.sh 8080
+./run.sh --port 3000
+
+# Run directly with Python
+FLASK_PORT=9095 python app.py
 ```
 
 ### Database Management

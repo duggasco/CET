@@ -10,7 +10,8 @@ NC='\033[0m' # No Color
 # Configuration
 APP_NAME="client-exploration-tool"
 DOCKER_IMAGE="${APP_NAME}:latest"
-PORT=5000
+DEFAULT_PORT=9095
+PORT=$DEFAULT_PORT
 
 echo -e "${BLUE}=== Client Exploration Tool Deployment ===${NC}"
 echo ""
@@ -45,7 +46,8 @@ run_with_docker() {
     echo -e "${YELLOW}Starting Docker container...${NC}"
     if docker run -d \
         --name "${APP_NAME}" \
-        -p "${PORT}:5000" \
+        -p "${PORT}:${PORT}" \
+        -e "FLASK_PORT=${PORT}" \
         -v "$(pwd)/client_exploration.db:/app/client_exploration.db" \
         "${DOCKER_IMAGE}"; then
         echo -e "${GREEN}✓ Container started successfully${NC}"
@@ -129,22 +131,30 @@ run_with_venv() {
     echo -e "${YELLOW}Starting Flask application...${NC}"
     echo -e "${BLUE}Application will run at: http://localhost:${PORT}${NC}"
     echo ""
-    python app.py
+    FLASK_PORT=${PORT} python app.py
 }
 
 # Function to display help
 show_help() {
-    echo "Usage: ./run.sh [OPTIONS]"
+    echo "Usage: ./run.sh [OPTIONS] [PORT]"
     echo ""
     echo "Options:"
     echo "  --docker    Force Docker deployment"
     echo "  --venv      Force virtual environment deployment"
     echo "  --build     Build/rebuild only (Docker mode)"
+    echo "  --port PORT Specify custom port (default: ${DEFAULT_PORT})"
     echo "  --help      Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./run.sh                    # Auto-detect, use default port ${DEFAULT_PORT}"
+    echo "  ./run.sh 8080               # Auto-detect, use port 8080"
+    echo "  ./run.sh --docker --port 3000  # Docker deployment on port 3000"
+    echo "  ./run.sh --venv 8000        # Venv deployment on port 8000"
     echo ""
     echo "By default, the script will:"
     echo "  1. Check if Docker is available and use it if found"
     echo "  2. Fall back to Python virtual environment if Docker is not available"
+    echo "  3. Use port ${DEFAULT_PORT} unless specified otherwise"
 }
 
 # Parse command line arguments
@@ -166,9 +176,24 @@ while [[ $# -gt 0 ]]; do
             BUILD_ONLY=true
             shift
             ;;
+        --port)
+            if [[ -n $2 && $2 =~ ^[0-9]+$ ]]; then
+                PORT=$2
+                shift 2
+            else
+                echo "Error: --port requires a numeric argument"
+                show_help
+                exit 1
+            fi
+            ;;
         --help)
             show_help
             exit 0
+            ;;
+        [0-9]*)
+            # If it's a number, treat it as a port
+            PORT=$1
+            shift
             ;;
         *)
             echo "Unknown option: $1"

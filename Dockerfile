@@ -24,8 +24,11 @@ COPY templates ./templates
 # Create database on container start
 RUN python database.py
 
-# Expose port
-EXPOSE 5000
+# Expose port (default)
+EXPOSE 9095
+
+# Set environment variable for port
+ENV FLASK_PORT=9095
 
 # Run the application
 CMD ["python", "app.py"]
