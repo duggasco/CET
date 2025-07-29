@@ -747,20 +747,21 @@ body.mobile .table-wrapper {
 
 body.mobile table {
     min-width: 100%;
-    font-size: 6px;
+    font-size: 10px;
 }
 
 body.mobile th {
-    padding: 2px 3px;
-    font-size: 6px;
+    padding: 4px 6px;
+    font-size: 10px;
     white-space: nowrap;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.2px;
+    text-transform: none;
 }
 
 body.mobile td {
-    padding: 2px 3px;
+    padding: 4px 6px;
     white-space: nowrap;
-    font-size: 6px;
+    font-size: 10px;
 }
 
 /* Mobile Column Adjustments */
@@ -777,7 +778,7 @@ body.mobile #fundTable td:nth-child(1) {
 
 body.mobile #accountTable th:nth-child(1),
 body.mobile #accountTable td:nth-child(1) {
-    font-size: 5px;
+    font-size: 10px;
     width: 35%;
     min-width: unset;
     max-width: unset;
@@ -814,7 +815,7 @@ body.mobile #accountTable td:nth-child(4) {
 
 /* Mobile Touch Enhancements */
 body.mobile tbody tr {
-    min-height: 20px;
+    min-height: 32px;
 }
 
 body.mobile tbody tr:hover {
@@ -890,7 +891,7 @@ body.mobile .table-wrapper thead {
 
 /* Mobile-friendly number formatting */
 body.mobile .number {
-    font-size: 6px;
+    font-size: 11px;
     font-family: 'SF Mono', Monaco, Consolas, monospace;
 }
 
@@ -902,7 +903,7 @@ body.mobile #longTermChart {
 
 /* Additional mobile table optimizations */
 body.mobile .table-wrapper {
-    font-size: 6px;
+    font-size: 10px;
     overflow-x: hidden;
 }
 
@@ -916,24 +917,24 @@ body.mobile table {
 /* Make percentage signs smaller */
 body.mobile .positive::before,
 body.mobile .negative::before {
-    font-size: 5px;
+    font-size: 9px;
 }
 
 /* Compact selected row styling */
 body.mobile tbody tr.selected td:first-child {
-    padding-left: 5px;
+    padding-left: 9px;
 }
 
 /* Reduce header height on mobile */
 body.mobile th {
-    height: 18px;
-    line-height: 14px;
+    height: 28px;
+    line-height: 20px;
 }
 
 /* Reduce row height */
 body.mobile td {
-    height: 18px;
-    line-height: 14px;
+    height: 32px;
+    line-height: 20px;
 }
 
 /* Force no horizontal scroll on mobile tables */
@@ -954,6 +955,65 @@ body.mobile th {
 /* Shrink fund ticker column even more */
 body.mobile #fundTable th:nth-child(1),
 body.mobile #fundTable td:nth-child(1) {
-    font-size: 5px;
-    letter-spacing: -0.5px;
+    font-size: 10px;
+    letter-spacing: -0.2px;
+}
+
+/* Ultra-compact mobile layout adjustments */
+body.mobile .table-section h2 {
+    font-size: 12px;
+    padding: 8px 10px;
+}
+
+/* Abbreviate headers on mobile to save space */
+body.mobile th {
+    text-transform: uppercase;
+}
+
+/* Show percentage symbols on mobile */
+body.mobile .positive::before {
+    content: '+';
+}
+body.mobile .negative::before {
+    content: '-';
+}
+
+/* Client names at readable size */
+body.mobile #clientTable td:nth-child(1) {
+    font-size: 10px;
+    font-weight: normal;
+}
+
+/* Adjust column widths for better fit */
+body.mobile #clientTable th:nth-child(1),
+body.mobile #clientTable td:nth-child(1),
+body.mobile #fundTable th:nth-child(1),
+body.mobile #fundTable td:nth-child(1),
+body.mobile #accountTable th:nth-child(1),
+body.mobile #accountTable td:nth-child(1) {
+    width: 40%;
+}
+
+body.mobile #clientTable th:nth-child(2),
+body.mobile #clientTable td:nth-child(2),
+body.mobile #fundTable th:nth-child(2),
+body.mobile #fundTable td:nth-child(2),
+body.mobile #accountTable th:nth-child(2),
+body.mobile #accountTable td:nth-child(2) {
+    width: 25%;
+}
+
+body.mobile #clientTable th:nth-child(3),
+body.mobile #clientTable td:nth-child(3),
+body.mobile #clientTable th:nth-child(4),
+body.mobile #clientTable td:nth-child(4),
+body.mobile #fundTable th:nth-child(3),
+body.mobile #fundTable td:nth-child(3),
+body.mobile #fundTable th:nth-child(4),
+body.mobile #fundTable td:nth-child(4),
+body.mobile #accountTable th:nth-child(3),
+body.mobile #accountTable td:nth-child(3),
+body.mobile #accountTable th:nth-child(4),
+body.mobile #accountTable td:nth-child(4) {
+    width: 17.5%;
 }
