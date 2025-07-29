@@ -327,6 +327,12 @@ function initializeCharts() {
                 },
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    filter: function(tooltipItem) {
+                        // Only show tooltip for the main dataset (index 0)
+                        return tooltipItem.datasetIndex === 0;
+                    }
                 }
             },
             scales: {
@@ -369,9 +375,11 @@ function initializeCharts() {
             onClick: (event, elements, chart) => {
                 // Chart click handler for drill-down
                 console.log('Recent chart clicked', elements);
-                if (elements.length > 0) {
-                    // Clicked on a data point
-                    handleChartClick('recent', elements[0].index);
+                // Filter to only handle clicks on the main dataset (index 0)
+                const mainDatasetElements = elements.filter(el => el.datasetIndex === 0);
+                if (mainDatasetElements.length > 0) {
+                    // Clicked on a data point from main dataset
+                    handleChartClick('recent', mainDatasetElements[0].index);
                 } else {
                     // Clicked on empty area - find nearest point
                     const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
@@ -421,6 +429,12 @@ function initializeCharts() {
                 },
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    filter: function(tooltipItem) {
+                        // Only show tooltip for the main dataset (index 0)
+                        return tooltipItem.datasetIndex === 0;
+                    }
                 }
             },
             scales: {
@@ -466,9 +480,11 @@ function initializeCharts() {
             onClick: (event, elements, chart) => {
                 // Chart click handler for drill-down
                 console.log('Long-term chart clicked', elements);
-                if (elements.length > 0) {
-                    // Clicked on a data point
-                    handleChartClick('longTerm', elements[0].index);
+                // Filter to only handle clicks on the main dataset (index 0)
+                const mainDatasetElements = elements.filter(el => el.datasetIndex === 0);
+                if (mainDatasetElements.length > 0) {
+                    // Clicked on a data point from main dataset
+                    handleChartClick('longTerm', mainDatasetElements[0].index);
                 } else {
                     // Clicked on empty area - find nearest point
                     const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
@@ -774,14 +790,102 @@ async function loadAccountDataForFund(accountId, fundName) {
 // Update filter indicator
 function updateFilterIndicator(text) {
     document.getElementById('current-filter').textContent = `Viewing: ${text}`;
+    
+    // Show/hide clear filters button
+    const clearButton = document.getElementById('clear-filters');
+    const hasActiveFilters = selectionState.clients.size > 0 || 
+                           selectionState.funds.size > 0 || 
+                           selectionState.accounts.size > 0 ||
+                           (currentFilter.type !== 'overview' && currentFilter.type !== null);
+    
+    clearButton.style.display = hasActiveFilters ? 'block' : 'none';
 }
 
 // Update recent chart (90 days)
 function updateRecentChart(data) {
     if (!data || data.length === 0) return;
     
+    // Calculate average, max, and min values
+    const balances = data.map(item => item.total_balance);
+    const avgBalance = balances.reduce((sum, val) => sum + val, 0) / balances.length;
+    const maxBalance = Math.max(...balances);
+    const minBalance = Math.min(...balances);
+    
+    // Update labels
     recentChart.data.labels = data.map(item => formatDate(item.balance_date));
-    recentChart.data.datasets[0].data = data.map(item => item.total_balance);
+    
+    // Clear existing datasets and rebuild
+    recentChart.data.datasets = [
+        {
+            label: 'Total Balance',
+            data: balances,
+            borderColor: '#0085ff',
+            backgroundColor: 'rgba(0, 133, 255, 0.1)',
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: '#0085ff',
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 3,
+            tension: 0.2,
+            order: 1
+        },
+        {
+            label: `Avg: ${formatCurrency(avgBalance)}`,
+            data: Array(balances.length).fill(avgBalance),
+            borderColor: 'rgba(107, 114, 128, 0.95)',  // Very dark gray
+            borderDash: [5, 5],
+            borderWidth: 0.5,  // Very thin
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            order: 2
+        },
+        {
+            label: `Max: ${formatCurrency(maxBalance)}`,
+            data: Array(balances.length).fill(maxBalance),
+            borderColor: 'rgba(59, 130, 246, 0.95)',  // Very dark blue
+            borderDash: [5, 5],
+            borderWidth: 0.5,  // Very thin
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            order: 3
+        },
+        {
+            label: `Min: ${formatCurrency(minBalance)}`,
+            data: Array(balances.length).fill(minBalance),
+            borderColor: 'rgba(239, 68, 68, 0.95)',  // Very dark red
+            borderDash: [5, 5],
+            borderWidth: 0.5,  // Very thin
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            order: 4
+        }
+    ];
+    
+    // Update chart options to show legend for trend lines
+    recentChart.options.plugins.legend = {
+        display: true,
+        position: 'top',
+        align: 'end',
+        labels: {
+            boxWidth: 15,
+            boxHeight: 1,
+            padding: 10,
+            font: {
+                size: 10,
+                weight: '400'
+            },
+            color: '#64748b',
+            filter: function(legendItem, chartData) {
+                // Only show trend line labels
+                return legendItem.datasetIndex > 0;
+            }
+        }
+    };
+    
     recentChart.update();
 }
 
@@ -789,9 +893,87 @@ function updateRecentChart(data) {
 function updateLongTermChart(data) {
     if (!data || data.length === 0) return;
     
-    // Show all daily data points without sampling
+    // Calculate average, max, and min values
+    const balances = data.map(item => item.total_balance);
+    const avgBalance = balances.reduce((sum, val) => sum + val, 0) / balances.length;
+    const maxBalance = Math.max(...balances);
+    const minBalance = Math.min(...balances);
+    
+    // Update labels
     longTermChart.data.labels = data.map(item => formatDateLong(item.balance_date));
-    longTermChart.data.datasets[0].data = data.map(item => item.total_balance);
+    
+    // Clear existing datasets and rebuild
+    longTermChart.data.datasets = [
+        {
+            label: 'Total Balance',
+            data: balances,
+            borderColor: '#00d647',
+            backgroundColor: 'rgba(0, 214, 71, 0.1)',
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: '#00d647',
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 3,
+            tension: 0.2,
+            order: 1
+        },
+        {
+            label: `Avg: ${formatCurrency(avgBalance)}`,
+            data: Array(balances.length).fill(avgBalance),
+            borderColor: 'rgba(107, 114, 128, 0.95)',  // Very dark gray
+            borderDash: [5, 5],
+            borderWidth: 0.5,  // Very thin
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            order: 2
+        },
+        {
+            label: `Max: ${formatCurrency(maxBalance)}`,
+            data: Array(balances.length).fill(maxBalance),
+            borderColor: 'rgba(59, 130, 246, 0.95)',  // Very dark blue
+            borderDash: [5, 5],
+            borderWidth: 0.5,  // Very thin
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            order: 3
+        },
+        {
+            label: `Min: ${formatCurrency(minBalance)}`,
+            data: Array(balances.length).fill(minBalance),
+            borderColor: 'rgba(239, 68, 68, 0.95)',  // Very dark red
+            borderDash: [5, 5],
+            borderWidth: 0.5,  // Very thin
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            order: 4
+        }
+    ];
+    
+    // Update chart options to show legend for trend lines
+    longTermChart.options.plugins.legend = {
+        display: true,
+        position: 'top',
+        align: 'end',
+        labels: {
+            boxWidth: 15,
+            boxHeight: 1,
+            padding: 10,
+            font: {
+                size: 10,
+                weight: '400'
+            },
+            color: '#64748b',
+            filter: function(legendItem, chartData) {
+                // Only show trend line labels
+                return legendItem.datasetIndex > 0;
+            }
+        }
+    };
+    
     longTermChart.update();
 }
 
@@ -907,6 +1089,12 @@ function initializeTableHandlers() {
     
     // Header click to reset
     document.querySelector('header h1').addEventListener('click', function() {
+        clearAllSelections();
+        loadOverviewData();
+    });
+    
+    // Clear filters button click
+    document.getElementById('clear-filters').addEventListener('click', function() {
         clearAllSelections();
         loadOverviewData();
     });

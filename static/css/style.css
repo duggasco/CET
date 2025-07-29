@@ -53,6 +53,12 @@ h1:hover {
     color: #2563eb;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .filter-indicator {
     font-size: 10px;
     color: #6b7280;
@@ -60,6 +66,26 @@ h1:hover {
     padding: 3px 10px;
     background-color: #f3f4f6;
     border-radius: 12px;
+}
+
+.clear-filters-btn {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 4px 12px;
+    background-color: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.clear-filters-btn:hover {
+    background-color: #dc2626;
+}
+
+.clear-filters-btn:active {
+    transform: scale(0.95);
 }
 
 /* Main Content */
