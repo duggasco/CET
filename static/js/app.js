@@ -1992,8 +1992,13 @@ function formatDateLong(dateString) {
 // Format percentage
 function formatPercentage(value) {
     if (value === null || value === undefined) return '<span class="neutral">N/A</span>';
-    const formatted = value.toFixed(1);
-    const prefix = value > 0 ? '+' : '';
-    const className = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+    
+    // Ensure we're working with a number
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return '<span class="neutral">N/A</span>';
+    
+    const formatted = numValue.toFixed(1);
+    const prefix = numValue > 0 ? '+' : '';
+    const className = numValue > 0 ? 'positive' : numValue < 0 ? 'negative' : 'neutral';
     return `<span class="${className}">${prefix}${formatted}%</span>`;
 }
