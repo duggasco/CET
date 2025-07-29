@@ -1,0 +1,773 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #f0f2f5;
+    color: #1a1a1a;
+    font-size: 12px;
+    line-height: 1.4;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Re-enable scrolling on mobile */
+body.mobile {
+    height: auto !important;
+    overflow: visible !important;
+    overflow-y: auto !important;
+}
+
+.container {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header */
+header {
+    background: #ffffff;
+    padding: 8px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    flex-shrink: 0;
+}
+
+h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    cursor: pointer;
+    margin: 0;
+}
+
+h1:hover {
+    color: #2563eb;
+}
+
+.filter-indicator {
+    font-size: 10px;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 3px 10px;
+    background-color: #f3f4f6;
+    border-radius: 12px;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 8px;
+    background: #f0f2f5;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* KPI Section */
+.kpi-section {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.kpi-card {
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.kpi-icon {
+    font-size: 16px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f3f4f6;
+    border-radius: 6px;
+    font-weight: 700;
+    color: #2563eb;
+}
+
+.kpi-content {
+    flex: 1;
+}
+
+.kpi-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1;
+    margin-bottom: 1px;
+}
+
+.kpi-label {
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.kpi-change {
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.kpi-change.positive {
+    color: #10b981;
+}
+
+.kpi-change.negative {
+    color: #ef4444;
+}
+
+.kpi-change.neutral {
+    color: #6b7280;
+}
+
+/* Split Content */
+.split-content {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    overflow: hidden;
+}
+
+/* Left Panel - Charts */
+.left-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chart-wrapper {
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.chart-header {
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.chart-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0 0 2px 0;
+}
+
+.chart-subtitle {
+    font-size: 10px;
+    color: #6b7280;
+}
+
+.chart-wrapper canvas {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Right Panel - Tables */
+.right-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.table-section {
+    background: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.table-section h2 {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 10px;
+    background: #ffffff;
+    color: #1a1a1a;
+    border-bottom: 1px solid #e5e7eb;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto; /* Allow horizontal scroll if needed */
+    min-height: 0;
+    position: relative; /* Establish positioning context */
+}
+
+/* Table Styling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    table-layout: fixed; /* Prevent column width changes */
+}
+
+th {
+    background: #f9fafb;
+    color: #6b7280;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 32px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f3f4f6;
+    height: 32px; /* Fixed row height */
+    line-height: 20px; /* Consistent line height */
+    box-sizing: border-box; /* Include padding in height */
+    vertical-align: middle; /* Center content vertically */
+}
+
+/* Only prevent wrapping on numeric columns */
+td.number {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* First column can wrap if needed but with ellipsis */
+td:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+tbody tr {
+    transition: background-color 0.15s ease, color 0.15s ease;
+    background: #ffffff;
+}
+
+tbody tr:hover {
+    background-color: #f9fafb;
+    cursor: pointer;
+}
+
+/* Selection styling - Tableau-like persistent selection */
+tbody tr.selected {
+    background-color: #dbeafe !important;
+    position: relative;
+}
+
+tbody tr.selected td:first-child {
+    padding-left: 11px; /* Account for border */
+    position: relative;
+}
+
+tbody tr.selected td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -1px;
+    bottom: -1px;
+    width: 3px;
+    background-color: #2563eb;
+}
+
+tbody tr.selected:hover {
+    background-color: #bfdbfe !important;
+}
+
+/* Ensure selection styles work for all tables */
+#clientTable tbody tr.selected,
+#fundTable tbody tr.selected,
+#accountTable tbody tr.selected {
+    background-color: #dbeafe !important;
+}
+
+#clientTable tbody tr.selected:hover,
+#fundTable tbody tr.selected:hover,
+#accountTable tbody tr.selected:hover {
+    background-color: #bfdbfe !important;
+}
+
+/* Visual emphasis for selected rows without changing layout */
+tbody tr.selected td:first-child {
+    color: #1e40af; /* Darker blue text instead of bold */
+}
+
+/* Ensure percentage colors remain visible on selected rows */
+tbody tr.selected .positive {
+    color: #059669;
+}
+
+tbody tr.selected .negative {
+    color: #dc2626;
+}
+
+tbody tr.selected .neutral {
+    color: #4b5563;
+}
+
+
+/* Number Formatting */
+.number {
+    text-align: right;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-weight: 500;
+}
+
+/* Percentage Colors */
+.positive {
+    color: #10b981;
+}
+
+.positive::before {
+    content: '+';
+}
+
+.negative {
+    color: #ef4444;
+}
+
+.neutral {
+    color: #6b7280;
+}
+
+/* Column Widths - Consistent across all tables */
+#clientTable th:nth-child(1),
+#clientTable td:nth-child(1),
+#fundTable th:nth-child(1),
+#fundTable td:nth-child(1) {
+    width: 40%;
+    min-width: 40%;
+    max-width: 40%;
+}
+
+/* Keep font weight consistent to prevent layout shifts */
+#clientTable td:nth-child(1),
+#fundTable td:nth-child(1) {
+    font-weight: 500; /* Medium weight always */
+}
+
+#accountTable th:nth-child(1),
+#accountTable td:nth-child(1) {
+    width: 40%;
+    min-width: 40%;
+    max-width: 40%;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px;
+    font-weight: 400; /* Normal weight for mono fonts */
+}
+
+#clientTable th:nth-child(2),
+#clientTable td:nth-child(2),
+#fundTable th:nth-child(2),
+#fundTable td:nth-child(2),
+#accountTable th:nth-child(2),
+#accountTable td:nth-child(2) {
+    width: 30%;
+    min-width: 30%;
+    max-width: 30%;
+    text-align: right;
+}
+
+#clientTable th:nth-child(3),
+#clientTable td:nth-child(3),
+#clientTable th:nth-child(4),
+#clientTable td:nth-child(4),
+#fundTable th:nth-child(3),
+#fundTable td:nth-child(3),
+#fundTable th:nth-child(4),
+#fundTable td:nth-child(4),
+#accountTable th:nth-child(3),
+#accountTable td:nth-child(3),
+#accountTable th:nth-child(4),
+#accountTable td:nth-child(4) {
+    width: 15%;
+    min-width: 15%;
+    max-width: 15%;
+    text-align: right;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Remove responsive design for professional desktop use */
+
+/* Loading State */
+.loading {
+    text-align: center;
+    padding: 60px;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+/* Chart hover effects */
+.chart-wrapper canvas {
+    cursor: pointer;
+}
+
+/* Fixed layout for desktop viewing */
+html {
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Mobile HTML overflow fix */
+body.mobile,
+html:has(body.mobile) {
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Subtle animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.kpi-card,
+.chart-wrapper,
+.table-section {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Focus states for accessibility */
+.kpi-card:focus,
+.chart-wrapper:focus,
+tbody tr:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+/* Subtle shadows for professional look */
+.kpi-card,
+.chart-wrapper,
+.table-section {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e6e9ef;
+}
+
+/* Mobile Styles */
+
+body.mobile .container {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible !important;
+}
+
+/* Mobile Header */
+body.mobile header {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+body.mobile h1 {
+    font-size: 18px;
+}
+
+body.mobile .filter-indicator {
+    font-size: 11px;
+    padding: 4px 12px;
+}
+
+/* Mobile Main Content */
+body.mobile .main-content {
+    padding: 12px;
+    overflow: visible !important;
+    height: auto;
+    min-height: auto;
+}
+
+/* Mobile KPI Section */
+body.mobile .kpi-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+body.mobile .kpi-card {
+    padding: 12px 16px;
+    gap: 12px;
+}
+
+body.mobile .kpi-icon {
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+}
+
+body.mobile .kpi-value {
+    font-size: 20px;
+}
+
+body.mobile .kpi-label {
+    font-size: 12px;
+}
+
+body.mobile .kpi-change {
+    font-size: 11px;
+}
+
+/* Mobile Split Content */
+body.mobile .split-content {
+    flex-direction: column;
+    gap: 16px;
+    height: auto;
+    overflow: visible !important;
+}
+
+/* Mobile Charts */
+body.mobile .left-panel {
+    gap: 16px;
+}
+
+body.mobile .chart-wrapper {
+    padding: 16px;
+    min-height: 250px;
+}
+
+body.mobile .chart-header h3 {
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+body.mobile .chart-subtitle {
+    font-size: 12px;
+}
+
+body.mobile .chart-wrapper canvas {
+    max-height: 200px;
+}
+
+/* Mobile Tables */
+body.mobile .right-panel {
+    gap: 16px;
+}
+
+body.mobile .table-section {
+    min-height: 300px;
+    height: auto;
+}
+
+body.mobile .table-section h2 {
+    font-size: 14px;
+    padding: 12px 16px;
+}
+
+body.mobile .table-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+    max-height: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.mobile table {
+    min-width: 100%;
+    font-size: 12px;
+}
+
+body.mobile th {
+    padding: 8px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+body.mobile td {
+    padding: 10px 12px;
+    white-space: nowrap;
+}
+
+/* Mobile Column Adjustments */
+body.mobile #clientTable th:nth-child(1),
+body.mobile #clientTable td:nth-child(1),
+body.mobile #fundTable th:nth-child(1),
+body.mobile #fundTable td:nth-child(1) {
+    width: auto;
+    min-width: 150px;
+}
+
+body.mobile #accountTable th:nth-child(1),
+body.mobile #accountTable td:nth-child(1) {
+    font-size: 10px;
+    width: auto;
+    min-width: 100px;
+}
+
+body.mobile #clientTable th:nth-child(2),
+body.mobile #clientTable td:nth-child(2),
+body.mobile #fundTable th:nth-child(2),
+body.mobile #fundTable td:nth-child(2),
+body.mobile #accountTable th:nth-child(2),
+body.mobile #accountTable td:nth-child(2) {
+    width: auto;
+    min-width: 100px;
+}
+
+body.mobile #clientTable th:nth-child(3),
+body.mobile #clientTable td:nth-child(3),
+body.mobile #clientTable th:nth-child(4),
+body.mobile #clientTable td:nth-child(4),
+body.mobile #fundTable th:nth-child(3),
+body.mobile #fundTable td:nth-child(3),
+body.mobile #fundTable th:nth-child(4),
+body.mobile #fundTable td:nth-child(4),
+body.mobile #accountTable th:nth-child(3),
+body.mobile #accountTable td:nth-child(3),
+body.mobile #accountTable th:nth-child(4),
+body.mobile #accountTable td:nth-child(4) {
+    width: auto;
+    min-width: 60px;
+}
+
+/* Mobile Touch Enhancements */
+body.mobile tbody tr {
+    min-height: 44px;
+}
+
+body.mobile tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+/* Improved touch targets for mobile */
+body.mobile tbody tr td {
+    position: relative;
+}
+
+body.mobile tbody tr td:first-child::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+}
+
+/* Prevent text selection on mobile for better scrolling */
+body.mobile .table-wrapper {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Enable smooth momentum scrolling */
+body.mobile,
+body.mobile .container,
+body.mobile .main-content,
+body.mobile .split-content,
+body.mobile .table-wrapper {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile Scrollbar */
+body.mobile ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+/* Remove animations on mobile for better performance */
+body.mobile .kpi-card,
+body.mobile .chart-wrapper,
+body.mobile .table-section {
+    animation: none;
+}
+
+/* Mobile-specific utilities */
+body.mobile .hide-mobile {
+    display: none;
+}
+
+body.mobile .show-mobile {
+    display: block;
+}
+
+/* Additional mobile optimizations for better table viewing */
+body.mobile .table-wrapper table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+body.mobile .table-wrapper thead {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #f9fafb;
+}
+
+/* Mobile-friendly number formatting */
+body.mobile .number {
+    font-size: 11px;
+}
+
+/* Ensure charts are not too tall on mobile */
+body.mobile #recentChart,
+body.mobile #longTermChart {
+    max-height: 180px !important;
+}

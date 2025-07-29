@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Exploration Tool</title>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ cache_bust }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Money Market Fund Explorer</h1>
+            <div id="current-filter" class="filter-indicator">Viewing: All Clients - All Funds</div>
+        </header>
+
+        <div class="main-content">
+            <!-- KPI Cards Section -->
+            <div class="kpi-section">
+                <div class="kpi-card">
+                    <div class="kpi-icon">$</div>
+                    <div class="kpi-content">
+                        <div class="kpi-value" id="totalAUM">$0</div>
+                        <div class="kpi-label">Total AUM</div>
+                        <div class="kpi-change" id="aumChange">--</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">C</div>
+                    <div class="kpi-content">
+                        <div class="kpi-value" id="totalClients">0</div>
+                        <div class="kpi-label">Active Clients</div>
+                        <div class="kpi-change neutral" id="clientChange">--</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">F</div>
+                    <div class="kpi-content">
+                        <div class="kpi-value" id="totalFunds">0</div>
+                        <div class="kpi-label">Funds</div>
+                        <div class="kpi-change neutral" id="fundChange">--</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">%</div>
+                    <div class="kpi-content">
+                        <div class="kpi-value" id="avgGrowth">0%</div>
+                        <div class="kpi-label">Avg. YTD Growth</div>
+                        <div class="kpi-change" id="growthTrend">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Split Content Section -->
+            <div class="split-content">
+                <!-- Left Side: Charts -->
+                <div class="left-panel">
+                    <div class="chart-wrapper">
+                        <div class="chart-header">
+                            <h3>90-Day Balance Trend</h3>
+                            <span class="chart-subtitle">Daily balance history</span>
+                        </div>
+                        <canvas id="recentChart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <div class="chart-header">
+                            <h3>3-Year Performance</h3>
+                            <span class="chart-subtitle">Long-term growth analysis</span>
+                        </div>
+                        <canvas id="longTermChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Right Side: Tables -->
+                <div class="right-panel">
+            <div class="table-section">
+                <h2>Client Balances</h2>
+                <div class="table-wrapper">
+                    <table id="clientTable">
+                        <thead>
+                            <tr>
+                                <th>Client Name</th>
+                                <th>Total Balance</th>
+                                <th>QTD %</th>
+                                <th>YTD %</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-section">
+                <h2>Fund Summary</h2>
+                <div class="table-wrapper">
+                    <table id="fundTable">
+                        <thead>
+                            <tr>
+                                <th>Fund Name</th>
+                                <th>Total Balance</th>
+                                <th>QTD %</th>
+                                <th>YTD %</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-section">
+                <h2>Account Details</h2>
+                <div class="table-wrapper">
+                    <table id="accountTable">
+                        <thead>
+                            <tr>
+                                <th>Account ID</th>
+                                <th>Total Balance</th>
+                                <th>QTD %</th>
+                                <th>YTD %</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>
