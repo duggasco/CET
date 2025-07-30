@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
     initializeTableHandlers();
     initializeFilterInputs();
+    initializeFilterToggle();
     loadOverviewData();
     
     // Add document click listener for clearing selections
@@ -1163,6 +1164,9 @@ function initializeFilterInputs() {
             accountNumber: ''
         };
         
+        // Update active filter count
+        updateActiveFilterCount();
+        
         // Clear selections
         clearAllSelections();
         loadOverviewData();
@@ -1176,8 +1180,78 @@ function applyTextFilters() {
     textFilters.clientName = document.getElementById('clientNameFilter').value.trim();
     textFilters.accountNumber = document.getElementById('accountNumberFilter').value.trim();
     
+    // Update active filter count
+    updateActiveFilterCount();
+    
     // Reload data with filters
     updateDataBasedOnSelections();
+}
+
+// Initialize filter toggle functionality
+function initializeFilterToggle() {
+    const toggleBtn = document.getElementById('toggle-filters');
+    const filterSection = document.getElementById('filterSection');
+    const activeFilterCount = toggleBtn.querySelector('.active-filter-count');
+    
+    // Check localStorage for saved state
+    const savedState = localStorage.getItem('filterSectionCollapsed');
+    if (savedState === 'true') {
+        filterSection.classList.add('collapsed');
+        toggleBtn.classList.remove('active');
+    } else {
+        toggleBtn.classList.add('active');
+    }
+    
+    // Toggle button click handler
+    toggleBtn.addEventListener('click', function() {
+        const isCollapsed = filterSection.classList.contains('collapsed');
+        
+        if (isCollapsed) {
+            filterSection.classList.remove('collapsed');
+            toggleBtn.classList.add('active');
+            localStorage.setItem('filterSectionCollapsed', 'false');
+        } else {
+            filterSection.classList.add('collapsed');
+            toggleBtn.classList.remove('active');
+            localStorage.setItem('filterSectionCollapsed', 'true');
+        }
+    });
+    
+    // Update active filter count
+    updateActiveFilterCount();
+    
+    // Keyboard shortcut (Ctrl+F)
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'f') {
+            e.preventDefault();
+            toggleBtn.click();
+            
+            // Focus first input if expanding
+            if (!filterSection.classList.contains('collapsed')) {
+                setTimeout(() => {
+                    document.getElementById('fundTickerFilter').focus();
+                }, 300);
+            }
+        }
+    });
+}
+
+// Update active filter count badge
+function updateActiveFilterCount() {
+    const toggleBtn = document.getElementById('toggle-filters');
+    const activeFilterCount = toggleBtn.querySelector('.active-filter-count');
+    
+    let count = 0;
+    if (textFilters.fundTicker) count++;
+    if (textFilters.clientName) count++;
+    if (textFilters.accountNumber) count++;
+    
+    if (count > 0) {
+        activeFilterCount.textContent = count;
+        activeFilterCount.style.display = 'inline-block';
+    } else {
+        activeFilterCount.style.display = 'none';
+    }
 }
 
 function initializeTableHandlers() {

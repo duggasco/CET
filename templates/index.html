@@ -12,6 +12,12 @@
     <div class="container">
         <header>
             <h1>Money Market Fund Explorer</h1>
+            <button id="toggle-filters" class="toggle-filters-btn" title="Toggle Filters (Ctrl+F)">
+                <svg class="filter-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1 3h14M3 7h10M5 11h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <span class="active-filter-count" style="display: none;">0</span>
+            </button>
             <div class="header-right">
                 <div id="current-filter" class="filter-indicator">Viewing: All Clients - All Funds</div>
                 <button id="clear-filters" class="clear-filters-btn" style="display: none;">Clear All Filters</button>
@@ -19,21 +25,23 @@
         </header>
 
         <!-- Filter Inputs Section -->
-        <div class="filter-section">
-            <div class="filter-inputs">
-                <div class="filter-input-group">
-                    <label for="fundTickerFilter">Fund Ticker</label>
-                    <input type="text" id="fundTickerFilter" placeholder="e.g., GMMF" autocomplete="off">
+        <div class="filter-section" id="filterSection">
+            <div class="filter-content">
+                <div class="filter-inputs">
+                    <div class="filter-input-group">
+                        <label for="fundTickerFilter">Fund Ticker</label>
+                        <input type="text" id="fundTickerFilter" placeholder="e.g., GMMF" autocomplete="off">
+                    </div>
+                    <div class="filter-input-group">
+                        <label for="clientNameFilter">Client Name</label>
+                        <input type="text" id="clientNameFilter" placeholder="e.g., Acme Corp" autocomplete="off">
+                    </div>
+                    <div class="filter-input-group">
+                        <label for="accountNumberFilter">Account Number</label>
+                        <input type="text" id="accountNumberFilter" placeholder="e.g., ACM-000-001" autocomplete="off">
+                    </div>
+                    <button id="applyFilters" class="apply-filters-btn">Apply Filters</button>
                 </div>
-                <div class="filter-input-group">
-                    <label for="clientNameFilter">Client Name</label>
-                    <input type="text" id="clientNameFilter" placeholder="e.g., Acme Corp" autocomplete="off">
-                </div>
-                <div class="filter-input-group">
-                    <label for="accountNumberFilter">Account Number</label>
-                    <input type="text" id="accountNumberFilter" placeholder="e.g., ACM-000-001" autocomplete="off">
-                </div>
-                <button id="applyFilters" class="apply-filters-btn">Apply Filters</button>
             </div>
         </div>
 

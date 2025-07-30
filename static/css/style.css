@@ -88,11 +88,79 @@ h1:hover {
     transform: scale(0.95);
 }
 
+/* Toggle Filters Button */
+.toggle-filters-btn {
+    position: relative;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 4px 10px;
+    background-color: #ffffff;
+    color: #676879;
+    border: 1px solid #e0e3e7;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    margin-right: 8px;
+}
+
+.toggle-filters-btn:hover {
+    background-color: #f3f4f6;
+    color: #2563eb;
+    border-color: #2563eb;
+}
+
+.toggle-filters-btn.active {
+    background-color: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+.toggle-filters-btn.active:hover {
+    background-color: #1d4ed8;
+}
+
+.filter-icon {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.3s;
+}
+
+.toggle-filters-btn.active .filter-icon {
+    transform: rotate(180deg);
+}
+
+.active-filter-count {
+    background-color: #ef4444;
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 10px;
+    min-width: 16px;
+    text-align: center;
+    line-height: 14px;
+}
+
 /* Filter Section */
 .filter-section {
     background: #ffffff;
-    padding: 12px 16px;
     border-bottom: 1px solid #e0e3e7;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    max-height: 80px; /* Adjust based on content height */
+}
+
+.filter-section.collapsed {
+    max-height: 0;
+    border-bottom: none;
+}
+
+.filter-content {
+    padding: 12px 16px;
 }
 
 .filter-inputs {
@@ -631,6 +699,20 @@ body.mobile h1 {
 body.mobile .filter-indicator {
     font-size: 11px;
     padding: 4px 12px;
+}
+
+body.mobile .toggle-filters-btn {
+    font-size: 11px;
+    padding: 6px 12px;
+    margin: 0;
+}
+
+body.mobile .header-right {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
 }
 
 /* Mobile Filter Section */

@@ -216,3 +216,30 @@ Two main tables in SQLite:
 - Tables automatically filter to show related data based on selections
 - Selection state managed globally using Sets for performance
 - Visual indicators include blue background, left border, and color changes
+
+## Testing Results
+
+### Comprehensive Multi-Selection Testing (Completed)
+The multiple table selection functionality has been thoroughly tested with Playwright automation. All tests passed successfully:
+
+#### Test Coverage
+1. **Multiple client selections** - Correctly aggregated balances across selected clients
+2. **Multiple fund selections** - Correctly filtered and summed balances for selected funds  
+3. **Multiple account selections** - Correctly calculated total AUM from selected accounts
+4. **Clients + funds combination** - Proper intersection filtering with accurate balance calculations
+5. **Clients + accounts combination** - Cross-table filtering worked correctly
+6. **Funds + accounts combination** - Intersection of selected funds and accounts calculated properly
+7. **All three tables selected** - Correct intersection of all three selections with accurate balance
+8. **Fund balances verification** - Fund balances correctly sum to account/client totals
+9. **Account balance verification** - Account balances match parent totals
+10. **Zero balance edge cases** - System correctly displays $0 balances with appropriate formatting
+
+#### Key Findings
+- Multi-selection functionality works correctly across all tables
+- Balance calculations are accurate for all selection combinations
+- Cross-table filtering creates proper data intersections
+- KPI cards update correctly based on selections
+- Chart functionality continues to work alongside multi-selections
+- Zero balances are handled properly with "$0" display
+- QTD/YTD calculations remain accurate with filtered data
+- Selection visual persistence maintained during data updates
