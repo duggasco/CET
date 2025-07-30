@@ -80,22 +80,7 @@ def get_text_filters():
 
 def apply_filters_to_response(data):
     """Apply text filters to all data arrays in a response"""
-    filters = get_text_filters()
-    
-    # Only apply filters if at least one is specified
-    if not any(filters.values()):
-        return data
-    
-    # Apply filters to each data type if present
-    if 'client_balances' in data:
-        data['client_balances'] = apply_text_filters(data['client_balances'], **filters)
-    
-    if 'fund_balances' in data:
-        data['fund_balances'] = apply_text_filters(data['fund_balances'], **filters)
-    
-    if 'account_details' in data:
-        data['account_details'] = apply_text_filters(data['account_details'], **filters)
-    
+    # All filtering is now done at SQL level, so just return data as-is
     return data
 
 @app.route('/')
@@ -109,36 +94,87 @@ def get_overview():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Get filter parameters
+    filters = get_text_filters()
+    fund_ticker_filter = filters.get('fund_ticker_filter', '')
+    client_name_filter = filters.get('client_name_filter', '')
+    account_number_filter = filters.get('account_number_filter', '')
     
     # Get aggregated balance over time for different periods
     end_date = (datetime.now() - timedelta(days=1)).date()  # Yesterday
     
     # 90-day history for recent chart
     start_date_90 = end_date - timedelta(days=90)
+    
+    # Build query based on filters
     query_90 = '''
         SELECT 
-            balance_date,
-            SUM(balance) as total_balance
-        FROM account_balances
-        WHERE balance_date >= ? AND balance_date <= ?
-        GROUP BY balance_date
-        ORDER BY balance_date
+            ab.balance_date,
+            SUM(ab.balance) as total_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date >= ? AND ab.balance_date <= ?
     '''
-    cursor.execute(query_90, (start_date_90.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+    
+    params = [start_date_90.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')]
+    
+    # Add filter conditions
+    if fund_ticker_filter:
+        query_90 += ' AND (f.fund_ticker LIKE ? OR ab.fund_name LIKE ?)'
+        params.extend([f'%{fund_ticker_filter}%', f'%{fund_ticker_filter}%'])
+    
+    if client_name_filter:
+        query_90 += ' AND cm.client_name LIKE ?'
+        params.append(f'%{client_name_filter}%')
+    
+    if account_number_filter:
+        query_90 += ' AND ab.account_id LIKE ?'
+        params.append(f'%{account_number_filter}%')
+    
+    query_90 += '''
+        GROUP BY ab.balance_date
+        ORDER BY ab.balance_date
+    '''
+    
+    cursor.execute(query_90, tuple(params))
     recent_history = [dict(row) for row in cursor.fetchall()]
     
     # 3-year history for long-term chart
     start_date_3y = end_date - timedelta(days=365*3)
+    
+    # Build query based on filters
     query_3y = '''
         SELECT 
-            balance_date,
-            SUM(balance) as total_balance
-        FROM account_balances
-        WHERE balance_date >= ? AND balance_date <= ?
-        GROUP BY balance_date
-        ORDER BY balance_date
+            ab.balance_date,
+            SUM(ab.balance) as total_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date >= ? AND ab.balance_date <= ?
     '''
-    cursor.execute(query_3y, (start_date_3y.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+    
+    params_3y = [start_date_3y.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')]
+    
+    # Add filter conditions
+    if fund_ticker_filter:
+        query_3y += ' AND (f.fund_ticker LIKE ? OR ab.fund_name LIKE ?)'
+        params_3y.extend([f'%{fund_ticker_filter}%', f'%{fund_ticker_filter}%'])
+    
+    if client_name_filter:
+        query_3y += ' AND cm.client_name LIKE ?'
+        params_3y.append(f'%{client_name_filter}%')
+    
+    if account_number_filter:
+        query_3y += ' AND ab.account_id LIKE ?'
+        params_3y.append(f'%{account_number_filter}%')
+    
+    query_3y += '''
+        GROUP BY ab.balance_date
+        ORDER BY ab.balance_date
+    '''
+    
+    cursor.execute(query_3y, tuple(params_3y))
     long_term_history = [dict(row) for row in cursor.fetchall()]
     
     # Calculate QTD and YTD start dates
@@ -148,39 +184,77 @@ def get_overview():
     ytd_start = date(today.year, 1, 1)
     
     # Get client aggregated balances with QTD and YTD changes
-    query = '''
+    # Build dynamic query with filters
+    base_current = """
+        SELECT 
+            cm.client_name,
+            cm.client_id,
+            SUM(ab.balance) as current_balance
+        FROM client_mapping cm
+        JOIN account_balances ab ON cm.account_id = ab.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+    """
+    
+    base_qtd = """
+        SELECT 
+            cm.client_id,
+            SUM(ab.balance) as qtd_start_balance
+        FROM client_mapping cm
+        JOIN account_balances ab ON cm.account_id = ab.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (
+            SELECT MAX(balance_date) FROM account_balances 
+            WHERE balance_date <= ?
+        )
+    """
+    
+    base_ytd = """
+        SELECT 
+            cm.client_id,
+            SUM(ab.balance) as ytd_start_balance
+        FROM client_mapping cm
+        JOIN account_balances ab ON cm.account_id = ab.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (
+            SELECT MAX(balance_date) FROM account_balances 
+            WHERE balance_date <= ?
+        )
+    """
+    
+    # Build filter conditions
+    filter_conditions = []
+    filter_params = []
+    
+    if fund_ticker_filter:
+        filter_conditions.append('(f.fund_ticker LIKE ? OR ab.fund_name LIKE ?)')
+        filter_params.extend([f'%{fund_ticker_filter}%', f'%{fund_ticker_filter}%'])
+    
+    if client_name_filter:
+        filter_conditions.append('cm.client_name LIKE ?')
+        filter_params.append(f'%{client_name_filter}%')
+    
+    if account_number_filter:
+        filter_conditions.append('ab.account_id LIKE ?')
+        filter_params.append(f'%{account_number_filter}%')
+    
+    # Build filter clause
+    filter_clause = ''
+    if filter_conditions:
+        filter_clause = ' AND ' + ' AND '.join(filter_conditions)
+    
+    # Build complete query
+    query = f"""
         WITH current_balances AS (
-            SELECT 
-                cm.client_name,
-                cm.client_id,
-                SUM(ab.balance) as current_balance
-            FROM client_mapping cm
-            JOIN account_balances ab ON cm.account_id = ab.account_id
-            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {base_current}{filter_clause}
             GROUP BY cm.client_name, cm.client_id
         ),
         qtd_start_balances AS (
-            SELECT 
-                cm.client_id,
-                SUM(ab.balance) as qtd_start_balance
-            FROM client_mapping cm
-            JOIN account_balances ab ON cm.account_id = ab.account_id
-            WHERE ab.balance_date = (
-                SELECT MAX(balance_date) FROM account_balances 
-                WHERE balance_date <= ?
-            )
+            {base_qtd}{filter_clause}
             GROUP BY cm.client_id
         ),
         ytd_start_balances AS (
-            SELECT 
-                cm.client_id,
-                SUM(ab.balance) as ytd_start_balance
-            FROM client_mapping cm
-            JOIN account_balances ab ON cm.account_id = ab.account_id
-            WHERE ab.balance_date = (
-                SELECT MAX(balance_date) FROM account_balances 
-                WHERE balance_date <= ?
-            )
+            {base_ytd}{filter_clause}
             GROUP BY cm.client_id
         )
         SELECT 
@@ -199,45 +273,74 @@ def get_overview():
         LEFT JOIN qtd_start_balances qsb ON cb.client_id = qsb.client_id
         LEFT JOIN ytd_start_balances ysb ON cb.client_id = ysb.client_id
         ORDER BY cb.current_balance DESC
-    '''
+    """
     
-    cursor.execute(query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
+    # Execute with appropriate parameters
+    if filter_conditions:
+        # Parameters: filter_params for current + qtd_date + filter_params for qtd + ytd_date + filter_params for ytd
+        all_params = filter_params + [qtd_start.strftime('%Y-%m-%d')] + filter_params + [ytd_start.strftime('%Y-%m-%d')] + filter_params
+        cursor.execute(query, tuple(all_params))
+    else:
+        cursor.execute(query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
+    
     client_balances = [dict(row) for row in cursor.fetchall()]
     
     # Get fund aggregated balances with QTD and YTD changes
-    query = '''
+    # Build dynamic query with filters
+    base_current_fund = """
+        SELECT 
+            ab.fund_name,
+            f.fund_ticker,
+            SUM(ab.balance) as current_balance,
+            COUNT(DISTINCT ab.account_id) as account_count
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+    """
+    
+    base_qtd_fund = """
+        SELECT 
+            ab.fund_name,
+            SUM(ab.balance) as qtd_start_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (
+            SELECT MAX(balance_date) FROM account_balances 
+            WHERE balance_date <= ?
+        )
+    """
+    
+    base_ytd_fund = """
+        SELECT 
+            ab.fund_name,
+            SUM(ab.balance) as ytd_start_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (
+            SELECT MAX(balance_date) FROM account_balances 
+            WHERE balance_date <= ?
+        )
+    """
+    
+    # Reuse filter conditions from client query
+    # filter_conditions and filter_params are already built above
+    
+    # Build complete fund query
+    fund_query = f"""
         WITH current_balances AS (
-            SELECT 
-                ab.fund_name,
-                f.fund_ticker,
-                SUM(ab.balance) as current_balance,
-                COUNT(DISTINCT ab.account_id) as account_count
-            FROM account_balances ab
-            LEFT JOIN funds f ON ab.fund_name = f.fund_name
-            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {base_current_fund}{filter_clause}
             GROUP BY ab.fund_name, f.fund_ticker
         ),
         qtd_start_balances AS (
-            SELECT 
-                fund_name,
-                SUM(balance) as qtd_start_balance
-            FROM account_balances
-            WHERE balance_date = (
-                SELECT MAX(balance_date) FROM account_balances 
-                WHERE balance_date <= ?
-            )
-            GROUP BY fund_name
+            {base_qtd_fund}{filter_clause}
+            GROUP BY ab.fund_name
         ),
         ytd_start_balances AS (
-            SELECT 
-                fund_name,
-                SUM(balance) as ytd_start_balance
-            FROM account_balances
-            WHERE balance_date = (
-                SELECT MAX(balance_date) FROM account_balances 
-                WHERE balance_date <= ?
-            )
-            GROUP BY fund_name
+            {base_ytd_fund}{filter_clause}
+            GROUP BY ab.fund_name
         )
         SELECT 
             cb.fund_name,
@@ -256,43 +359,70 @@ def get_overview():
         LEFT JOIN qtd_start_balances qsb ON cb.fund_name = qsb.fund_name
         LEFT JOIN ytd_start_balances ysb ON cb.fund_name = ysb.fund_name
         ORDER BY cb.current_balance DESC
-    '''
+    """
     
-    cursor.execute(query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
+    # Execute with appropriate parameters
+    if filter_conditions:
+        # Parameters: filter_params for current + qtd_date + filter_params for qtd + ytd_date + filter_params for ytd
+        fund_params = filter_params + [qtd_start.strftime('%Y-%m-%d')] + filter_params + [ytd_start.strftime('%Y-%m-%d')] + filter_params
+        cursor.execute(fund_query, tuple(fund_params))
+    else:
+        cursor.execute(fund_query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
+    
     fund_balances = [dict(row) for row in cursor.fetchall()]
     
     # Get account details with QTD and YTD - aggregated at account level
-    query = '''
+    # Build dynamic query with filters
+    base_current_account = """
+        SELECT 
+            ab.account_id,
+            cm.client_name,
+            SUM(ab.balance) as current_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+    """
+    
+    base_qtd_account = """
+        SELECT 
+            ab.account_id,
+            SUM(ab.balance) as qtd_start_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (
+            SELECT MAX(balance_date) FROM account_balances 
+            WHERE balance_date <= ?
+        )
+    """
+    
+    base_ytd_account = """
+        SELECT 
+            ab.account_id,
+            SUM(ab.balance) as ytd_start_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date = (
+            SELECT MAX(balance_date) FROM account_balances 
+            WHERE balance_date <= ?
+        )
+    """
+    
+    # Build complete account query using same filter conditions
+    account_query = f"""
         WITH current_balances AS (
-            SELECT 
-                ab.account_id,
-                cm.client_name,
-                SUM(ab.balance) as current_balance
-            FROM account_balances ab
-            JOIN client_mapping cm ON ab.account_id = cm.account_id
-            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {base_current_account}{filter_clause}
             GROUP BY ab.account_id, cm.client_name
+            HAVING current_balance > 0
         ),
         qtd_start_balances AS (
-            SELECT 
-                ab.account_id,
-                SUM(ab.balance) as qtd_start_balance
-            FROM account_balances ab
-            WHERE ab.balance_date = (
-                SELECT MAX(balance_date) FROM account_balances 
-                WHERE balance_date <= ?
-            )
+            {base_qtd_account}{filter_clause}
             GROUP BY ab.account_id
         ),
         ytd_start_balances AS (
-            SELECT 
-                ab.account_id,
-                SUM(ab.balance) as ytd_start_balance
-            FROM account_balances ab
-            WHERE ab.balance_date = (
-                SELECT MAX(balance_date) FROM account_balances 
-                WHERE balance_date <= ?
-            )
+            {base_ytd_account}{filter_clause}
             GROUP BY ab.account_id
         )
         SELECT 
@@ -311,9 +441,16 @@ def get_overview():
         LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
         LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
         ORDER BY cb.current_balance DESC
-    '''
+    """
     
-    cursor.execute(query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
+    # Execute with appropriate parameters (same as fund query)
+    if filter_conditions:
+        # Parameters: filter_params for current + qtd_date + filter_params for qtd + ytd_date + filter_params for ytd
+        account_params = filter_params + [qtd_start.strftime('%Y-%m-%d')] + filter_params + [ytd_start.strftime('%Y-%m-%d')] + filter_params
+        cursor.execute(account_query, tuple(account_params))
+    else:
+        cursor.execute(account_query, (qtd_start.strftime('%Y-%m-%d'), ytd_start.strftime('%Y-%m-%d')))
+    
     account_details = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
