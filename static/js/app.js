@@ -1060,10 +1060,14 @@ function updateClientTable(data) {
     const tbody = document.querySelector('#clientTable tbody');
     tbody.innerHTML = '';
     
-    // Apply text filters
-    const filteredData = applyTextFiltersToData(data, 'client');
+    if (!data || !Array.isArray(data)) {
+        console.error('Invalid data for client table:', data);
+        return;
+    }
     
-    filteredData.forEach(client => {
+    // Data is already filtered server-side
+    console.log('Updating client table with', data.length, 'items');
+    data.forEach(client => {
         const row = tbody.insertRow();
         row.dataset.clientId = client.client_id;
         row.dataset.clientName = client.client_name;
@@ -1081,10 +1085,13 @@ function updateFundTable(data) {
     const tbody = document.querySelector('#fundTable tbody');
     tbody.innerHTML = '';
     
-    // Apply text filters
-    const filteredData = applyTextFiltersToData(data, 'fund');
+    if (!data || !Array.isArray(data)) {
+        console.error('Invalid data for fund table:', data);
+        return;
+    }
     
-    filteredData.forEach(fund => {
+    // Data is already filtered server-side
+    data.forEach(fund => {
         const row = tbody.insertRow();
         row.dataset.fundName = fund.fund_name;
         row.dataset.fundTicker = fund.fund_ticker;
@@ -1102,10 +1109,13 @@ function updateAccountTable(data) {
     const tbody = document.querySelector('#accountTable tbody');
     tbody.innerHTML = '';
     
-    // Apply text filters
-    const filteredData = applyTextFiltersToData(data, 'account');
+    if (!data || !Array.isArray(data)) {
+        console.error('Invalid data for account table:', data);
+        return;
+    }
     
-    filteredData.forEach(account => {
+    // Data is already filtered server-side
+    data.forEach(account => {
         const row = tbody.insertRow();
         row.dataset.accountId = account.account_id;
         // Store client and fund info in data attributes for filtering
