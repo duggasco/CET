@@ -1,12 +1,12 @@
 # Changelog
 
-## [Latest] - UI Button Consistency Fix
+## [Latest] - Options Dropdown Layout Improvements
 
 ### Fixed
-- **Options dropdown button height inconsistency**
-  - Added `display: flex`, `align-items: center`, and `justify-content: center` to Apply Filters button
-  - Ensures consistent height between Apply Filters and Download CSV buttons
-  - Both buttons now use identical flex layout properties
+- **Button alignment issues in options dropdown**
+  - Right-aligned Download CSV button using `margin-left: auto` to separate from Apply Filters button
+  - Prevents dynamic text size changes in download button from affecting Apply Filters button alignment
+  - Added consistent flex layout properties to both buttons for uniform height
 
 ## [Previous] - Table Stability Improvements
 

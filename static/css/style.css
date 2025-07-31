@@ -1169,6 +1169,7 @@ body.mobile #accountTable td:nth-child(4) {
     transition: all 0.2s ease;
     white-space: nowrap;
     min-width: 140px;
+    margin-left: auto; /* Push to right side */
 }
 
 .download-csv-filter-btn:hover {
