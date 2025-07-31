@@ -102,3 +102,112 @@ The bug was fixed by adding comprehensive text filter support to individual API 
 - **All KPIs accurate**: Total AUM, client count, fund count all reflect filtered data
 - **Filter indicator correct**: Shows combined selections and text filters properly
 - **No regressions**: All existing functionality remains intact
+
+## 🔍 ACTIVE: Account QTD/YTD Values Showing as N/A in Client-Fund View
+
+**Status**: Active (Not Fixed)  
+**Priority**: Medium  
+**Discovered**: January 2025  
+**Reporter**: User testing  
+
+### Problem Description
+QTD and YTD percentage values display as "N/A" for accounts when viewing a specific client-fund combination. The values display correctly in other views (overview, single client, single fund).
+
+### Reproduction Steps
+1. Navigate to overview page (http://localhost:9095)
+2. Click on any client in the Client Balances table (e.g., "Capital Management")
+3. Click on any fund in the Fund Summary table (e.g., "Prime Money Market")
+4. **BUG**: Account Details table shows "N/A" for all QTD % and YTD % values
+
+### Expected vs Actual Behavior
+- **Expected**: Account details should show calculated QTD/YTD percentages (e.g., +0.1%, +1.5%)
+- **Actual**: All accounts show "N/A" for both QTD % and YTD % columns
+- **Other fields**: Account ID and Total Balance display correctly
+
+### Evidence from Testing
+```
+API Response for /api/client/811e66af-0899-4b4f-b061-2057527514f7/fund/Prime%20Money%20Market:
+{
+  "account_details": [
+    {
+      "account_id": "CAP-006-000",
+      "balance": 5346194.99,
+      "client_name": "Capital Management",
+      "fund_name": "Prime Money Market"
+      // Missing: qtd_change, ytd_change
+    },
+    {
+      "account_id": "CAP-006-001",
+      "balance": 4609074.25,
+      "client_name": "Capital Management", 
+      "fund_name": "Prime Money Market"
+      // Missing: qtd_change, ytd_change
+    }
+  ]
+}
+```
+
+### Root Cause Analysis
+The issue is in `/api/client/<client_id>/fund/<fund_name>` endpoint (app.py:1207-1211):
+
+```python
+'account_details': [{'account_id': acc['account_id'], 
+                   'client_name': client_name,
+                   'fund_name': fund_name,
+                   'balance': acc['balance']} for acc in account_details]
+```
+
+The SQL query calculates `qtd_change` and `ytd_change` (lines 1172-1179), but these fields are not included when building the response.
+
+### Technical Context
+- **Frontend handling**: `formatPercentage()` function correctly displays "N/A" for null/undefined values
+- **SQL query**: Properly calculates QTD/YTD values with CTEs and LEFT JOINs
+- **API response**: Missing fields in the list comprehension
+- **Other endpoints**: Work correctly (e.g., `/api/overview`, `/api/client/<id>`, `/api/date/<date>`)
+
+### Impact
+- **Functionality**: Users cannot see QTD/YTD performance for individual accounts in client-fund view
+- **User Experience**: Inconsistent display - values show in other views but not this one
+- **Data Completeness**: The data is calculated but not returned to frontend
+
+### Fix Required
+Update the account_details list comprehension to include all calculated fields:
+
+```python
+'account_details': [{'account_id': acc['account_id'], 
+                   'client_name': client_name,
+                   'fund_name': fund_name,
+                   'balance': acc['balance'],
+                   'qtd_change': acc['qtd_change'],
+                   'ytd_change': acc['ytd_change']} for acc in account_details]
+```
+
+### Important Context for Future Development
+
+#### Chart Formatting (January 2025)
+- Y-axis values now display in millions format (e.g., "$42.5M")
+- Both 90-day and 3-year charts use horizontal x-axis labels
+- Added `formatCurrencyInMillions()` function for chart formatting
+- Original `formatCurrency()` retained for tables and KPIs
+
+#### Recent Major Features
+1. **CSV Download**: Comprehensive export with all daily granular data
+2. **Multi-Selection**: Tableau-like behavior across all tables
+3. **Text Filters**: Fund ticker, client name, account number filtering
+4. **KPI Metrics**: Backend-calculated metrics for accurate filtering
+
+#### Key Files and Endpoints
+- **Backend**: `/root/CET/app.py` - Flask API with QTD/YTD calculations
+- **Frontend**: `/root/CET/static/js/app.js` - Selection state management
+- **Endpoints with QTD/YTD**: 
+  - `/api/overview`
+  - `/api/client/<client_id>`
+  - `/api/fund/<fund_name>`
+  - `/api/client/<client_id>/fund/<fund_name>` (BROKEN)
+  - `/api/date/<date_string>`
+  - `/api/account/<account_id>`
+
+#### Database Schema
+- `client_mapping`: account_id → client_name, client_id (UUID)
+- `account_balances`: Daily fund-level balances per account
+- All IDs use UUIDs per global instructions
