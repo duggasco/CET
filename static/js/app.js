@@ -425,7 +425,7 @@ function initializeCharts() {
                     },
                     ticks: {
                         callback: function(value) {
-                            return formatCurrency(value);
+                            return formatCurrencyInMillions(value);
                         },
                         font: {
                             size: isMobile ? 8 : 9,
@@ -517,8 +517,8 @@ function initializeCharts() {
                         color: '#64748b',
                         maxTicksLimit: isMobile ? 6 : 12,  // Show ~12 labels for 3 years (quarterly)
                         autoSkip: true,
-                        maxRotation: 45,
-                        minRotation: 45,
+                        maxRotation: 0,
+                        minRotation: 0,
                         padding: 4
                     }
                 },
@@ -530,7 +530,7 @@ function initializeCharts() {
                     },
                     ticks: {
                         callback: function(value) {
-                            return formatCurrency(value);
+                            return formatCurrencyInMillions(value);
                         },
                         font: {
                             size: isMobile ? 8 : 9,
@@ -1719,7 +1719,7 @@ function isClickOutsideTables(target) {
     return true;
 }
 
-// Format currency
+// Format currency (for display in tables, KPIs, etc.)
 function formatCurrency(value) {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -1727,6 +1727,12 @@ function formatCurrency(value) {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     }).format(value);
+}
+
+// Format currency in millions for chart axes
+function formatCurrencyInMillions(value) {
+    const millions = value / 1000000;
+    return '$' + millions.toFixed(1) + 'M';
 }
 
 // Format date for recent chart

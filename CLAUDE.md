@@ -204,6 +204,16 @@ Two main tables in SQLite:
 
 ## Recent Updates
 
+### Chart Formatting Improvements (January 2025)
+- **Enhanced Chart Readability**: Updated both 90-day and 3-year charts with improved formatting
+- **Y-Axis in Millions**: Charts now display values in millions format (e.g., "$42.5M" instead of "$42,500,000")
+- **Consistent X-Axis Alignment**: Both charts now use horizontal date labels for better readability
+- **Implementation Details**:
+  - Added `formatCurrencyInMillions()` function for chart axis formatting
+  - Updated both chart configurations to use millions formatting on y-axis
+  - Set 3-year chart x-axis rotation to 0 degrees to match 90-day chart
+  - Maintained existing `formatCurrency()` function for tables and KPIs
+
 ### KPI Fix for Multi-Selection Filtering (January 2025)
 - **Problem Resolved**: Fixed Total AUM KPI showing incorrect values during multi-client selections
 - **Root Cause**: KPI calculations used unfiltered `client_balances` data while tables showed filtered results
