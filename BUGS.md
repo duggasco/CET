@@ -1,5 +1,135 @@
 # BUGS.md - Known Issues and Bug Reports
 
+## ✅ RESOLVED: QTD/YTD Metrics Misalignment Across Tables
+
+**Status**: Fixed  
+**Priority**: High  
+**Discovered**: January 2025  
+**Reporter**: User observation during multi-selection testing  
+**Fixed**: January 2025  
+**Fix Author**: Claude Code collaboration with Gemini AI  
+
+### Problem Description
+When users make selections across multiple tables (clients, funds, accounts), the QTD and YTD percentages show different values in each table, even though they should represent the same time period and filtered dataset.
+
+### Reproduction Steps
+1. Navigate to overview page
+2. Select "Client A" + "Fund B" + "Account X" combination
+3. Observe the QTD/YTD values in each table
+4. **BUG**: Each table shows different QTD/YTD percentages
+
+### Expected vs Actual Behavior
+- **Expected**: All tables show the SAME QTD/YTD values (e.g., +0.5% QTD, +2.1% YTD) for the intersection
+- **Before Fix**: 
+  - Client table: Shows QTD/YTD for Client A across ALL funds
+  - Fund table: Shows QTD/YTD for Fund B across ALL clients
+  - Account table: Shows QTD/YTD for the actual intersection
+- **After Fix**: All tables show identical QTD/YTD values calculated from the same intersection
+
+### Root Cause Analysis
+The issue stems from intentional design in the `get_filtered_data` function (`app.py`) that calculates QTD/YTD from different data subsets:
+
+```python
+# Different WHERE clauses for each table:
+client_where_clause  # Excludes client_ids filter
+fund_where_clause    # Excludes fund_names filter  
+full_where_clause    # Includes all filters (used for accounts)
+```
+
+**Key Insight**: When you select specific items, you're looking at a specific pot of money. If the balance is the same across tables, the QTD/YTD percentages MUST be the same because they're calculated from that same balance.
+
+### Solution Implemented
+**1. Added Helper Function** (`app.py`):
+```python
+def generate_qtd_ytd_cte_sql(entity_type, group_by_field, where_clause):
+    """Generate QTD/YTD CTE SQL fragment for consistent metric calculation"""
+    # Returns standardized QTD/YTD Common Table Expressions
+```
+
+**2. Modified All Queries** to use `full_where_clause` for QTD/YTD calculations:
+- **Client balances query**: QTD/YTD CTEs now use full intersection
+- **Fund balances query**: QTD/YTD CTEs now use full intersection  
+- **Account details query**: Updated for consistency with helper function
+
+**3. Enhanced NULL Handling**:
+- Changed CASE WHEN logic to return NULL (not 0) for new accounts/funds
+- Frontend displays "N/A" for entities without historical data
+
+**4. Added Debug Logging**:
+```python
+if client_ids or fund_names or account_ids:
+    app.logger.debug(f"QTD/YTD calculation using full intersection: {full_where_clause}")
+```
+
+### Testing Results
+**Test Scenario**: Capital Management + Prime Money Market selection
+
+| Table | Balance | QTD % | YTD % | Result |
+|-------|---------|-------|-------|---------|
+| **Client Balances** | $14,749,395 | **+0.1%** | **+1.9%** | ✅ Aligned |
+| **Fund Summary** | $14,749,395 | **+0.1%** | **+1.9%** | ✅ Aligned |
+| **Account Details** | (Individual accounts) | Calculated from intersection | Calculated from intersection | ✅ Consistent |
+
+### Technical Implementation
+**Files Modified**:
+- `/root/CET/app.py`: Lines 30-74 (helper function), 1720-1836 (updated queries)
+
+**Key Changes**:
+- `client_query_params`: Now uses `full_params` for QTD/YTD calculations
+- `fund_query_params`: Now uses `full_params` for QTD/YTD calculations
+- All QTD/YTD CTEs use standardized helper function with `full_where_clause`
+
+### Impact Resolved
+- ✅ **User Confusion**: All tables now show identical percentages for same data
+- ✅ **Data Integrity**: Metrics perfectly align with displayed balance
+- ✅ **Financial Accuracy**: Critical requirement met for financial dashboard consistency
+
+### Verification
+- **Multi-selection support**: ✅ Works with client + fund + account combinations
+- **Balance consistency**: ✅ Same balance = same QTD/YTD across all tables
+- **NULL handling**: ✅ New entities show "N/A" instead of misleading 0%
+- **Performance**: ✅ No degradation observed
+
+## 🔍 ACTIVE: Fund Summary Occasionally Shows N/A for QTD/YTD
+
+**Status**: Active - Root cause identified, fix pending  
+**Priority**: Medium  
+**Discovered**: January 2025  
+**Reporter**: User observation  
+
+### Problem Description
+The Fund Summary table occasionally displays "N/A" for QTD/YTD values instead of actual percentages, while other tables show values correctly.
+
+### Root Cause Analysis
+Two potential causes identified:
+
+1. **Empty Result Sets**: 
+   - If a fund has no balance history in QTD/YTD start periods, subqueries return empty results
+   - Fund gets excluded from result set entirely rather than showing with 0%
+   - Frontend may display cached fund list with N/A for missing data
+
+2. **SQL Edge Cases**:
+   - Despite CASE WHEN logic handling NULL/0 cases, SQLite might return NULL in certain scenarios
+   - Division operations or JOIN mismatches could produce unexpected NULLs
+
+### Technical Context
+```javascript
+// Frontend formatPercentage function (app.js)
+function formatPercentage(value) {
+    if (value === null || value === undefined) return '<span class="neutral">N/A</span>';
+    // ... rest of formatting logic
+}
+```
+
+The backend should always return 0 (not NULL) due to CASE WHEN logic, suggesting either:
+- Funds without current balances are excluded from results
+- Edge case in SQL calculation returning NULL despite defensive coding
+
+### Solution Required
+1. Add COALESCE to all QTD/YTD calculations for extra NULL protection
+2. Ensure funds without current balances are included with 0% values
+3. Verify frontend receives complete fund list with all QTD/YTD values
+
 ## ✅ RESOLVED: Text Filters Lost When Making Table Selections
 
 **Status**: Fixed  

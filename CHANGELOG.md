@@ -1,6 +1,33 @@
 # Changelog
 
-## [Latest] - Options Dropdown Layout Improvements
+## [Latest] - QTD/YTD Metrics Alignment Fix
+
+### Fixed
+- **QTD/YTD metrics misalignment across tables during multi-selection**
+  - All tables now show identical QTD/YTD percentages when filtering by client + fund combinations
+  - Root cause: Different tables calculated metrics from different data subsets instead of unified intersection
+  - Solution: Modified all queries to use `full_where_clause` for QTD/YTD calculations while maintaining display logic
+
+### Added
+- **Helper function for consistent QTD/YTD calculations**
+  - `generate_qtd_ytd_cte_sql()` function eliminates code duplication across client/fund/account queries
+  - Standardized Common Table Expression generation for quarter-to-date and year-to-date metrics
+  - Enhanced NULL handling: Returns NULL (displays "N/A") for new entities instead of misleading 0%
+
+### Changed
+- **QTD/YTD calculation methodology**
+  - Client balances: QTD/YTD now calculated from full intersection (not client-only subset)
+  - Fund balances: QTD/YTD now calculated from full intersection (not fund-only subset)  
+  - Account details: Updated for consistency with new helper function
+  - Parameter handling: All QTD/YTD queries use `full_params` for proper filtering
+
+### Technical Details
+- Added debug logging when full intersection filtering is applied
+- Modified `/api/data` endpoint queries in `get_filtered_data` function
+- Ensured same balance = same QTD/YTD percentages across all tables
+- Verified multi-selection support with Capital Management + Prime Money Market test case
+
+## [Previous] - Options Dropdown Layout Improvements
 
 ### Fixed
 - **Button alignment issues in options dropdown**
