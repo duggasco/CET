@@ -79,7 +79,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Clear all selections and go to overview
             if (selectionState.clients.size > 0 || selectionState.funds.size > 0 || selectionState.accounts.size > 0) {
                 clearAllSelections();
-                loadOverviewData();
+                // If we have a date filter active, reload date data, otherwise go to overview
+                if (currentFilter.type === 'date' && currentFilter.value) {
+                    loadDateData(currentFilter.value);
+                } else {
+                    loadOverviewData();
+                }
             }
         }
     });
@@ -562,9 +567,6 @@ async function loadOverviewData() {
         updateClientTable(data.client_balances);
         updateFundTable(data.fund_balances);
         updateAccountTable(data.account_details);
-        
-        // Restore visual selections
-        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading overview data:', error);
     }
@@ -573,24 +575,118 @@ async function loadOverviewData() {
 // Load data for a specific date
 async function loadDateData(dateString) {
     try {
+        const hasClientSelection = selectionState.clients.size > 0;
+        const hasFundSelection = selectionState.funds.size > 0;
+        const hasAccountSelection = selectionState.accounts.size > 0;
+        
+        // Get date data with text filters
         const response = await fetch(`/api/date/${dateString}` + buildQueryString());
         const data = await response.json();
         
-        currentFilter = { type: 'date', value: dateString };
-        updateFilterIndicator(`Date: ${formatDateLong(dateString)}`);
+        // Store the full date data before filtering
+        const fullDateData = data;
+        
+        // If we have selections, filter the date data on the frontend
+        if (hasClientSelection || hasFundSelection || hasAccountSelection) {
+            // Filter client balances
+            if (hasClientSelection) {
+                data.client_balances = data.client_balances.filter(client => 
+                    selectionState.clients.has(client.client_id)
+                );
+            }
+            
+            // Filter fund balances
+            if (hasFundSelection) {
+                data.fund_balances = data.fund_balances.filter(fund => 
+                    selectionState.funds.has(fund.fund_name)
+                );
+            }
+            
+            // Filter account details
+            if (hasAccountSelection) {
+                data.account_details = data.account_details.filter(account => 
+                    selectionState.accounts.has(account.account_id)
+                );
+            } else if (hasClientSelection || hasFundSelection) {
+                // Filter accounts based on client/fund selections
+                data.account_details = data.account_details.filter(account => {
+                    let matchClient = !hasClientSelection;
+                    let matchFund = !hasFundSelection;
+                    
+                    if (hasClientSelection && account.client_name) {
+                        // Find client ID for this account
+                        const client = fullDateData.client_balances.find(c => 
+                            c.client_name === account.client_name
+                        );
+                        if (client) {
+                            matchClient = selectionState.clients.has(client.client_id);
+                        }
+                    }
+                    
+                    if (hasFundSelection && account.fund_name) {
+                        matchFund = selectionState.funds.has(account.fund_name);
+                    }
+                    
+                    return matchClient && matchFund;
+                });
+            }
+            
+            // Recalculate totals for KPIs based on filtered data
+            const filteredTotal = data.client_balances.reduce((sum, client) => 
+                sum + client.total_balance, 0
+            );
+            
+            // Adjust chart data to reflect filtered totals
+            if (filteredTotal > 0 && fullDateData.recent_history.length > 0) {
+                const fullTotal = fullDateData.client_balances.reduce((sum, client) => 
+                    sum + client.total_balance, 0
+                );
+                const ratio = filteredTotal / fullTotal;
+                
+                data.recent_history = data.recent_history.map(item => ({
+                    ...item,
+                    total_balance: item.total_balance * ratio
+                }));
+                
+                data.long_term_history = data.long_term_history.map(item => ({
+                    ...item,
+                    total_balance: item.total_balance * ratio
+                }));
+            }
+        }
+        
+        // Build filter description
+        let filterParts = [`Date: ${formatDateLong(dateString)}`];
+        if (hasClientSelection) {
+            filterParts.push(`${selectionState.clients.size} Client${selectionState.clients.size > 1 ? 's' : ''}`);
+        }
+        if (hasFundSelection) {
+            filterParts.push(`${selectionState.funds.size} Fund${selectionState.funds.size > 1 ? 's' : ''}`);
+        }
+        if (hasAccountSelection) {
+            filterParts.push(`${selectionState.accounts.size} Account${selectionState.accounts.size > 1 ? 's' : ''}`);
+        }
+        
+        currentFilter = { type: 'date', value: dateString, hasSelections: hasClientSelection || hasFundSelection || hasAccountSelection };
+        updateFilterIndicator(filterParts.join(' | '));
         updateKPICards(data);
         
-        // Keep the chart history but update tables with date-specific data
+        // Update charts and tables with filtered data
         updateRecentChart(data.recent_history);
         updateLongTermChart(data.long_term_history);
         
-        // Update tables with data for the selected date (with QTD/YTD calculated relative to the date)
-        updateClientTable(data.client_balances);
-        updateFundTable(data.fund_balances);
-        updateAccountTable(data.account_details);
+        // For tables, show full data if no selections, filtered data if selections exist
+        if (hasClientSelection || hasFundSelection || hasAccountSelection) {
+            updateClientTable(data.client_balances);
+            updateFundTable(data.fund_balances);
+            updateAccountTable(data.account_details);
+        } else {
+            // Show all data for the date
+            updateClientTable(fullDateData.client_balances);
+            updateFundTable(fullDateData.fund_balances);
+            updateAccountTable(fullDateData.account_details);
+        }
         
-        // Restore visual selections
-        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading date data:', error);
     }
@@ -621,8 +717,6 @@ async function loadClientData(clientId, clientName) {
         // Update KPIs with client data
         updateKPICards(data);
         
-        // Restore visual selections
-        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading client data:', error);
     }
@@ -652,8 +746,6 @@ async function loadFundData(fundName) {
         // Update KPIs with fund data
         updateKPICards(data);
         
-        // Restore visual selections
-        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading fund data:', error);
     }
@@ -739,8 +831,6 @@ async function loadAccountData(accountId) {
         // Update KPIs with account data
         updateKPICards(data);
         
-        // Restore visual selections
-        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading account data:', error);
     }
@@ -819,8 +909,6 @@ async function loadAccountDataForFund(accountId, fundName) {
         // Update KPIs with account data
         updateKPICards(data);
         
-        // Restore visual selections
-        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading account data for fund:', error);
     }
@@ -1072,6 +1160,10 @@ function updateClientTable(data) {
         const row = tbody.insertRow();
         row.dataset.clientId = client.client_id;
         row.dataset.clientName = client.client_name;
+        // Check if this client is selected
+        if (selectionState.clients.has(client.client_id)) {
+            row.classList.add('selected');
+        }
         row.innerHTML = `
             <td>${client.client_name}</td>
             <td class="number">${formatCurrency(client.total_balance)}</td>
@@ -1096,6 +1188,10 @@ function updateFundTable(data) {
         const row = tbody.insertRow();
         row.dataset.fundName = fund.fund_name;
         row.dataset.fundTicker = fund.fund_ticker;
+        // Check if this fund is selected
+        if (selectionState.funds.has(fund.fund_name)) {
+            row.classList.add('selected');
+        }
         row.innerHTML = `
             <td>${fund.fund_name}</td>
             <td class="number">${formatCurrency(fund.total_balance)}</td>
@@ -1122,6 +1218,10 @@ function updateAccountTable(data) {
         // Store client and fund info in data attributes for filtering
         if (account.client_name) row.dataset.clientName = account.client_name;
         if (account.fund_name) row.dataset.fundName = account.fund_name;
+        // Check if this account is selected
+        if (selectionState.accounts.has(account.account_id)) {
+            row.classList.add('selected');
+        }
         row.innerHTML = `
             <td>${account.account_id}</td>
             <td class="number">${formatCurrency(account.balance || account.total_balance || 0)}</td>
@@ -1298,6 +1398,7 @@ function initializeTableHandlers() {
     // Clear filters button click
     document.getElementById('clear-filters').addEventListener('click', function() {
         clearAllSelections();
+        currentFilter = { type: 'overview', value: null };
         loadOverviewData();
     });
 }
