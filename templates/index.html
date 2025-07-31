@@ -12,7 +12,7 @@
     <div class="container">
         <header>
             <h1>Money Market Fund Explorer</h1>
-            <button id="toggle-filters" class="toggle-filters-btn" title="Toggle Filters (Ctrl+F)">
+            <button id="toggle-filters" class="toggle-filters-btn" title="Toggle Options (Ctrl+F)" aria-label="Toggle Options">
                 <svg class="filter-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1 3h14M3 7h10M5 11h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
@@ -21,19 +21,10 @@
             <div class="header-right">
                 <div id="current-filter" class="filter-indicator">Viewing: All Clients - All Funds</div>
                 <button id="clear-filters" class="clear-filters-btn" style="display: none;">Clear All Filters</button>
-                <div class="download-section">
-                    <button id="download-csv-btn" onclick="downloadCSV()" class="download-btn">
-                        <svg class="icon" viewBox="0 0 24 24" width="16" height="16">
-                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                        </svg>
-                        Download CSV
-                    </button>
-                    <span id="download-count" class="download-count">Loading...</span>
-                </div>
             </div>
         </header>
 
-        <!-- Filter Inputs Section -->
+        <!-- Options Section -->
         <div class="filter-section" id="filterSection">
             <div class="filter-content">
                 <div class="filter-inputs">
@@ -50,6 +41,12 @@
                         <input type="text" id="accountNumberFilter" placeholder="e.g., ACM-000-001" autocomplete="off">
                     </div>
                     <button id="applyFilters" class="apply-filters-btn">Apply Filters</button>
+                    <button id="download-csv-btn" onclick="downloadCSV()" class="download-csv-filter-btn">
+                        <svg class="icon" viewBox="0 0 24 24" width="16" height="16">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
+                        <span id="download-text">Download Loading...</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -97,15 +94,15 @@
                 <div class="left-panel">
                     <div class="chart-wrapper">
                         <div class="chart-header">
-                            <h3>90-Day Balance Trend</h3>
-                            <span class="chart-subtitle">Daily balance history</span>
+                            <h3>90-Day Balance Trend <span class="chart-subtitle">Daily balance history</span></h3>
+                            <div class="chart-stats" id="recentChartStats"></div>
                         </div>
                         <canvas id="recentChart"></canvas>
                     </div>
                     <div class="chart-wrapper">
                         <div class="chart-header">
-                            <h3>3-Year Performance</h3>
-                            <span class="chart-subtitle">Long-term growth analysis</span>
+                            <h3>3-Year Performance <span class="chart-subtitle">Long-term growth analysis</span></h3>
+                            <div class="chart-stats" id="longTermChartStats"></div>
                         </div>
                         <canvas id="longTermChart"></canvas>
                     </div>

@@ -207,7 +207,7 @@ h1:hover {
 }
 
 .apply-filters-btn {
-    padding: 6px 16px;
+    padding: 8px 16px;
     font-size: 12px;
     font-weight: 500;
     background-color: #0085ff;
@@ -217,6 +217,7 @@ h1:hover {
     cursor: pointer;
     transition: background-color 0.2s, transform 0.1s;
     white-space: nowrap;
+    min-width: 120px;
 }
 
 .apply-filters-btn:hover {
@@ -339,20 +340,63 @@ h1:hover {
 }
 
 .chart-header {
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .chart-header h3 {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: #1a1a1a;
-    margin: 0 0 2px 0;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
 }
 
 .chart-subtitle {
     font-size: 10px;
     color: #6b7280;
+    font-weight: 400;
+}
+
+.chart-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-weight: 600;
+}
+
+.stat-value.max {
+    color: #3b82f6;
+}
+
+.stat-value.avg {
+    color: #6b7280;
+}
+
+.stat-value.min {
+    color: #ef4444;
 }
 
 .chart-wrapper canvas {
@@ -793,12 +837,17 @@ body.mobile .chart-wrapper {
 }
 
 body.mobile .chart-header h3 {
-    font-size: 16px;
-    margin-bottom: 4px;
+    font-size: 14px;
+    margin-bottom: 0;
 }
 
 body.mobile .chart-subtitle {
-    font-size: 12px;
+    font-size: 11px;
+}
+
+body.mobile .chart-stats {
+    font-size: 11px;
+    gap: 10px;
 }
 
 body.mobile .chart-wrapper canvas {
@@ -1101,46 +1150,75 @@ body.mobile #accountTable td:nth-child(4) {
 }
 
 /* CSV Download Styles */
-.download-section {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-left: 20px;
-}
-
-.download-btn {
+.download-csv-filter-btn {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
-    background-color: #0085ff;
+    padding: 8px 16px;
+    background-color: #00d647;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 12px;
     font-family: inherit;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    min-width: 140px;
 }
 
-.download-btn:hover {
-    background-color: #0066cc;
+.download-csv-filter-btn:hover {
+    background-color: #00b83d;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.download-btn:disabled {
+.download-csv-filter-btn:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
-.download-btn .icon {
+.download-csv-filter-btn.warning {
+    background-color: #ff9500;
+}
+
+.download-csv-filter-btn.warning:hover {
+    background-color: #e88600;
+}
+
+.download-csv-filter-btn .icon {
     fill: currentColor;
+    flex-shrink: 0;
 }
 
-.download-count {
-    font-size: 12px;
-    color: #676879;
+.download-csv-filter-btn #download-text {
+    display: inline-block;
+    transition: font-size 0.2s ease;
 }
 
-.download-count.warning {
+/* Mobile styles for download button */
+body.mobile .download-csv-filter-btn {
+    width: 100%;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+/* Clear date filter button */
+.clear-date-btn {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.clear-date-btn:hover {
     color: #ff3d57;
-    font-weight: bold;
 }

@@ -86,6 +86,60 @@ def apply_filters_to_response(data):
     # All filtering is now done at SQL level, so just return data as-is
     return data
 
+def build_filter_clause(client_ids=None, fund_names=None, account_ids=None, 
+                       fund_ticker_filter='', client_name_filter='', 
+                       account_number_filter='', prepend_and=True,
+                       exclude_filters=None):
+    """Build dynamic WHERE clause for SQL queries based on provided filters.
+    
+    Note: If using fund_ticker_filter, the query must join the funds table with alias 'f'
+    
+    Args:
+        exclude_filters: List of filter names to exclude (e.g., ['client_ids', 'fund_names', 'account_ids'])
+    
+    Returns:
+        tuple: (where_clause_string, params_list)
+    """
+    if exclude_filters is None:
+        exclude_filters = []
+        
+    conditions = []
+    params = []
+    
+    # Exact match filters for multi-selection
+    if client_ids and 'client_ids' not in exclude_filters:
+        placeholders = ','.join(['?' for _ in client_ids])
+        conditions.append(f'cm.client_id IN ({placeholders})')
+        params.extend(client_ids)
+    
+    if fund_names and 'fund_names' not in exclude_filters:
+        placeholders = ','.join(['?' for _ in fund_names])
+        conditions.append(f'ab.fund_name IN ({placeholders})')
+        params.extend(fund_names)
+    
+    if account_ids and 'account_ids' not in exclude_filters:
+        placeholders = ','.join(['?' for _ in account_ids])
+        conditions.append(f'ab.account_id IN ({placeholders})')
+        params.extend(account_ids)
+    
+    # Text filters (partial match with LIKE)
+    if fund_ticker_filter:
+        conditions.append('(f.fund_ticker LIKE ? OR ab.fund_name LIKE ?)')
+        params.extend([f'%{fund_ticker_filter}%', f'%{fund_ticker_filter}%'])
+    
+    if client_name_filter:
+        conditions.append('cm.client_name LIKE ?')
+        params.append(f'%{client_name_filter}%')
+    
+    if account_number_filter:
+        conditions.append('ab.account_id LIKE ?')
+        params.append(f'%{account_number_filter}%')
+    
+    if conditions:
+        clause = ' AND '.join(conditions)
+        return (' AND ' + clause) if prepend_and else clause, params
+    return '', params
+
 @app.route('/')
 def index():
     # Generate cache bust parameter based on current timestamp
@@ -1281,35 +1335,65 @@ def get_date_data(date_string):
     cursor.execute(query, (date_string, qtd_comparison_date.strftime('%Y-%m-%d'), ytd_comparison_date.strftime('%Y-%m-%d')))
     account_details = [dict(row) for row in cursor.fetchall()]
     
+    # Get filter parameters from query string
+    client_ids = request.args.getlist('client_id')
+    fund_names = request.args.getlist('fund_name')
+    account_ids = request.args.getlist('account_id')
+    
     # Get history data (same as overview for charts context)
     end_date = (datetime.now() - timedelta(days=1)).date()
     
+    # Build WHERE clause for filtered history
+    history_where_clauses = []
+    history_params = []
+    
+    if client_ids:
+        placeholders = ','.join(['?' for _ in client_ids])
+        history_where_clauses.append(f'ab.account_id IN (SELECT account_id FROM client_mapping WHERE client_id IN ({placeholders}))')
+        history_params.extend(client_ids)
+    
+    if fund_names:
+        placeholders = ','.join(['?' for _ in fund_names])
+        history_where_clauses.append(f'ab.fund_name IN ({placeholders})')
+        history_params.extend(fund_names)
+    
+    if account_ids:
+        placeholders = ','.join(['?' for _ in account_ids])
+        history_where_clauses.append(f'ab.account_id IN ({placeholders})')
+        history_params.extend(account_ids)
+    
+    history_where_clause = ' AND '.join(history_where_clauses) if history_where_clauses else '1=1'
+    
     # 90-day history
     start_date_90 = end_date - timedelta(days=90)
-    query_90 = '''
+    query_90 = f'''
         SELECT 
-            balance_date,
-            SUM(balance) as total_balance
-        FROM account_balances
-        WHERE balance_date >= ? AND balance_date <= ?
-        GROUP BY balance_date
-        ORDER BY balance_date
+            ab.balance_date,
+            SUM(ab.balance) as total_balance
+        FROM account_balances ab
+        WHERE ab.balance_date >= ? AND ab.balance_date <= ?
+        AND {history_where_clause}
+        GROUP BY ab.balance_date
+        ORDER BY ab.balance_date
     '''
-    cursor.execute(query_90, (start_date_90.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+    params_90 = [start_date_90.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')] + history_params
+    cursor.execute(query_90, params_90)
     recent_history = [dict(row) for row in cursor.fetchall()]
     
     # 3-year history
     start_date_3y = end_date - timedelta(days=365*3)
-    query_3y = '''
+    query_3y = f'''
         SELECT 
-            balance_date,
-            SUM(balance) as total_balance
-        FROM account_balances
-        WHERE balance_date >= ? AND balance_date <= ?
-        GROUP BY balance_date
-        ORDER BY balance_date
+            ab.balance_date,
+            SUM(ab.balance) as total_balance
+        FROM account_balances ab
+        WHERE ab.balance_date >= ? AND ab.balance_date <= ?
+        AND {history_where_clause}
+        GROUP BY ab.balance_date
+        ORDER BY ab.balance_date
     '''
-    cursor.execute(query_3y, (start_date_3y.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+    params_3y = [start_date_3y.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')] + history_params
+    cursor.execute(query_3y, params_3y)
     long_term_history = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
@@ -1403,6 +1487,382 @@ def _get_historical_balances(conn, account_fund_pairs, target_date):
             results[key]['ytd_balance'] = row['balance'] or 0
     
     return results
+
+@app.route('/api/data')
+def get_filtered_data():
+    """Unified endpoint for fetching data with multiple filters."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get all filter parameters
+    client_ids = request.args.getlist('client_id')
+    fund_names = request.args.getlist('fund_name')
+    account_ids = request.args.getlist('account_id')
+    
+    # Get text filters
+    fund_ticker_filter = request.args.get('fund_ticker', '').strip()
+    client_name_filter = request.args.get('client_name', '').strip()
+    account_number_filter = request.args.get('account_number', '').strip()
+    
+    # Validate that at least one filter is provided
+    all_filters = (client_ids + fund_names + account_ids +
+                   [fund_ticker_filter, client_name_filter, account_number_filter])
+    
+    if not any(f for f in all_filters if f):
+        return jsonify({'error': 'At least one filter must be provided'}), 400
+    
+    # Build different filter clauses for each table
+    # Client table: exclude client_ids filter
+    client_where_clause, client_params = build_filter_clause(
+        client_ids=client_ids,
+        fund_names=fund_names,
+        account_ids=account_ids,
+        fund_ticker_filter=fund_ticker_filter,
+        client_name_filter=client_name_filter,
+        account_number_filter=account_number_filter,
+        prepend_and=True,
+        exclude_filters=['client_ids']
+    )
+    
+    # Fund table: exclude fund_names filter
+    fund_where_clause, fund_params = build_filter_clause(
+        client_ids=client_ids,
+        fund_names=fund_names,
+        account_ids=account_ids,
+        fund_ticker_filter=fund_ticker_filter,
+        client_name_filter=client_name_filter,
+        account_number_filter=account_number_filter,
+        prepend_and=True,
+        exclude_filters=['fund_names']
+    )
+    
+    # Account table and charts: include all filters
+    full_where_clause, full_params = build_filter_clause(
+        client_ids=client_ids,
+        fund_names=fund_names,
+        account_ids=account_ids,
+        fund_ticker_filter=fund_ticker_filter,
+        client_name_filter=client_name_filter,
+        account_number_filter=account_number_filter,
+        prepend_and=True
+    )
+    
+    # Get date range
+    end_date = (datetime.now() - timedelta(days=1)).date()
+    start_date_90 = end_date - timedelta(days=90)
+    start_date_3y = end_date - timedelta(days=365*3)
+    
+    # Calculate QTD and YTD start dates
+    today = end_date
+    current_quarter = (today.month - 1) // 3
+    qtd_start = date(today.year, current_quarter * 3 + 1, 1)
+    ytd_start = date(today.year, 1, 1)
+    
+    # Get recent history (90 days)
+    recent_query = f'''
+        SELECT 
+            ab.balance_date,
+            SUM(ab.balance) as total_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date >= ? AND ab.balance_date <= ?
+        {full_where_clause}
+        GROUP BY ab.balance_date
+        ORDER BY ab.balance_date
+    '''
+    
+    cursor.execute(recent_query, [start_date_90.strftime('%Y-%m-%d'), 
+                                  end_date.strftime('%Y-%m-%d')] + full_params)
+    recent_history = [dict(row) for row in cursor.fetchall()]
+    
+    # Get long-term history (3 years)
+    long_query = f'''
+        SELECT 
+            ab.balance_date,
+            SUM(ab.balance) as total_balance
+        FROM account_balances ab
+        JOIN client_mapping cm ON ab.account_id = cm.account_id
+        LEFT JOIN funds f ON ab.fund_name = f.fund_name
+        WHERE ab.balance_date >= ? AND ab.balance_date <= ?
+        {full_where_clause}
+        GROUP BY ab.balance_date
+        ORDER BY ab.balance_date
+    '''
+    
+    cursor.execute(long_query, [start_date_3y.strftime('%Y-%m-%d'), 
+                                end_date.strftime('%Y-%m-%d')] + full_params)
+    long_term_history = [dict(row) for row in cursor.fetchall()]
+    
+    # Get client balances with QTD and YTD
+    client_query = f'''
+        WITH current_balances AS (
+            SELECT 
+                cm.client_name,
+                cm.client_id,
+                SUM(ab.balance) as current_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {client_where_clause}
+            GROUP BY cm.client_name, cm.client_id
+        ),
+        qtd_start_balances AS (
+            SELECT 
+                cm.client_id,
+                SUM(ab.balance) as qtd_start_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= ?
+            )
+            {client_where_clause}
+            GROUP BY cm.client_id
+        ),
+        ytd_start_balances AS (
+            SELECT 
+                cm.client_id,
+                SUM(ab.balance) as ytd_start_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= ?
+            )
+            {client_where_clause}
+            GROUP BY cm.client_id
+        )
+        SELECT 
+            cb.client_name,
+            cb.client_id,
+            cb.current_balance as total_balance,
+            CASE 
+                WHEN qsb.qtd_start_balance IS NULL OR qsb.qtd_start_balance = 0 THEN 0
+                ELSE ((cb.current_balance - qsb.qtd_start_balance) / qsb.qtd_start_balance) * 100
+            END as qtd_change,
+            CASE 
+                WHEN ysb.ytd_start_balance IS NULL OR ysb.ytd_start_balance = 0 THEN 0
+                ELSE ((cb.current_balance - ysb.ytd_start_balance) / ysb.ytd_start_balance) * 100
+            END as ytd_change
+        FROM current_balances cb
+        LEFT JOIN qtd_start_balances qsb ON cb.client_id = qsb.client_id
+        LEFT JOIN ytd_start_balances ysb ON cb.client_id = ysb.client_id
+        ORDER BY cb.current_balance DESC
+    '''
+    
+    client_query_params = client_params + [qtd_start.strftime('%Y-%m-%d')] + client_params + [ytd_start.strftime('%Y-%m-%d')] + client_params
+    cursor.execute(client_query, client_query_params)
+    client_balances = [dict(row) for row in cursor.fetchall()]
+    
+    # Get fund balances with QTD and YTD
+    fund_query = f'''
+        WITH current_balances AS (
+            SELECT 
+                ab.fund_name,
+                f.fund_ticker,
+                SUM(ab.balance) as current_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {fund_where_clause}
+            GROUP BY ab.fund_name, f.fund_ticker
+        ),
+        qtd_start_balances AS (
+            SELECT 
+                ab.fund_name,
+                SUM(ab.balance) as qtd_start_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= ?
+            )
+            {fund_where_clause}
+            GROUP BY ab.fund_name
+        ),
+        ytd_start_balances AS (
+            SELECT 
+                ab.fund_name,
+                SUM(ab.balance) as ytd_start_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= ?
+            )
+            {fund_where_clause}
+            GROUP BY ab.fund_name
+        )
+        SELECT 
+            cb.fund_name,
+            cb.fund_ticker,
+            cb.current_balance as total_balance,
+            CASE 
+                WHEN qsb.qtd_start_balance IS NULL OR qsb.qtd_start_balance = 0 THEN 0
+                ELSE ((cb.current_balance - qsb.qtd_start_balance) / qsb.qtd_start_balance) * 100
+            END as qtd_change,
+            CASE 
+                WHEN ysb.ytd_start_balance IS NULL OR ysb.ytd_start_balance = 0 THEN 0
+                ELSE ((cb.current_balance - ysb.ytd_start_balance) / ysb.ytd_start_balance) * 100
+            END as ytd_change
+        FROM current_balances cb
+        LEFT JOIN qtd_start_balances qsb ON cb.fund_name = qsb.fund_name
+        LEFT JOIN ytd_start_balances ysb ON cb.fund_name = ysb.fund_name
+        ORDER BY cb.current_balance DESC
+    '''
+    
+    fund_query_params = fund_params + [qtd_start.strftime('%Y-%m-%d')] + fund_params + [ytd_start.strftime('%Y-%m-%d')] + fund_params
+    cursor.execute(fund_query, fund_query_params)
+    fund_balances = [dict(row) for row in cursor.fetchall()]
+    
+    # Get account details with QTD and YTD
+    account_query = f'''
+        WITH current_balances AS (
+            SELECT 
+                ab.account_id,
+                cm.client_name,
+                SUM(ab.balance) as current_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {full_where_clause}
+            GROUP BY ab.account_id, cm.client_name
+        ),
+        qtd_start_balances AS (
+            SELECT 
+                ab.account_id,
+                SUM(ab.balance) as qtd_start_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= ?
+            )
+            {full_where_clause}
+            GROUP BY ab.account_id
+        ),
+        ytd_start_balances AS (
+            SELECT 
+                ab.account_id,
+                SUM(ab.balance) as ytd_start_balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= ?
+            )
+            {full_where_clause}
+            GROUP BY ab.account_id
+        )
+        SELECT 
+            cb.account_id,
+            cb.client_name,
+            cb.current_balance as total_balance,
+            CASE 
+                WHEN qsb.qtd_start_balance IS NULL OR qsb.qtd_start_balance = 0 THEN 0
+                ELSE ((cb.current_balance - qsb.qtd_start_balance) / qsb.qtd_start_balance) * 100
+            END as qtd_change,
+            CASE 
+                WHEN ysb.ytd_start_balance IS NULL OR ysb.ytd_start_balance = 0 THEN 0
+                ELSE ((cb.current_balance - ysb.ytd_start_balance) / ysb.ytd_start_balance) * 100
+            END as ytd_change
+        FROM current_balances cb
+        LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
+        LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
+        ORDER BY cb.current_balance DESC
+    '''
+    
+    account_query_params = full_params + [qtd_start.strftime('%Y-%m-%d')] + full_params + [ytd_start.strftime('%Y-%m-%d')] + full_params
+    cursor.execute(account_query, account_query_params)
+    account_details = [dict(row) for row in cursor.fetchall()]
+    
+    # Get KPI metrics (using full filtering)
+    kpi_query = '''
+        WITH current_totals AS (
+            SELECT 
+                COALESCE(SUM(ab.balance), 0) as total_aum,
+                COUNT(DISTINCT cm.client_id) as active_clients,
+                COUNT(DISTINCT ab.fund_name) as active_funds,
+                COUNT(DISTINCT ab.account_id) as active_accounts
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
+            {full_where_clause}
+        ),
+        past_totals AS (
+            SELECT 
+                COALESCE(SUM(ab.balance), 0) as total_aum_30d_ago
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            LEFT JOIN funds f ON ab.fund_name = f.fund_name
+            WHERE ab.balance_date = (
+                SELECT MAX(balance_date) FROM account_balances 
+                WHERE balance_date <= date((SELECT MAX(balance_date) FROM account_balances), '-30 days')
+            )
+            {full_where_clause}
+        )
+        SELECT 
+            ct.total_aum,
+            ct.active_clients,
+            ct.active_funds,
+            ct.active_accounts,
+            pt.total_aum_30d_ago,
+            CASE 
+                WHEN pt.total_aum_30d_ago = 0 THEN 0
+                ELSE ((ct.total_aum - pt.total_aum_30d_ago) / pt.total_aum_30d_ago) * 100
+            END as change_30d_pct
+        FROM current_totals ct
+        CROSS JOIN past_totals pt
+    '''
+
+    cursor.execute(kpi_query.format(full_where_clause=full_where_clause), full_params + full_params)
+    kpi_result = cursor.fetchone()
+
+    if kpi_result:
+        kpi_metrics = dict(kpi_result)
+    else:
+        # Provide default values if no data matches the filters
+        kpi_metrics = {
+            'total_aum': 0,
+            'active_clients': 0,
+            'active_funds': 0,
+            'active_accounts': 0,
+            'total_aum_30d_ago': 0,
+            'change_30d_pct': 0
+        }
+    
+    conn.close()
+    
+    # Build response
+    response_data = {
+        'filters': {
+            'client_ids': client_ids,
+            'fund_names': fund_names,
+            'account_ids': account_ids,
+            'fund_ticker': fund_ticker_filter,
+            'client_name': client_name_filter,
+            'account_number': account_number_filter
+        },
+        'recent_history': recent_history,
+        'long_term_history': long_term_history,
+        'client_balances': client_balances,
+        'fund_balances': fund_balances,
+        'account_details': account_details,
+        'kpi_metrics': kpi_metrics
+    }
+    
+    return jsonify(response_data)
 
 @app.route('/api/download_csv/count')
 def get_download_count():

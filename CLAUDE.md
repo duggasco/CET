@@ -204,6 +204,25 @@ Two main tables in SQLite:
 
 ## Recent Updates
 
+### KPI Fix for Multi-Selection Filtering (January 2025)
+- **Problem Resolved**: Fixed Total AUM KPI showing incorrect values during multi-client selections
+- **Root Cause**: KPI calculations used unfiltered `client_balances` data while tables showed filtered results
+- **Backend Solution**: 
+  - Added comprehensive `kpi_metrics` query in `/api/data` endpoint (app.py:1789-1843)
+  - Uses `full_where_clause` to ensure KPI calculations respect all active filters
+  - Calculates filtered totals for AUM, client count, fund count, account count
+  - Includes accurate 30-day percentage change based on filtered data
+  - Robust error handling with COALESCE and fallback values for edge cases
+- **Frontend Solution**:
+  - Updated `updateKPICards` function in app.js to prioritize backend `kpi_metrics`
+  - Maintains backward compatibility with fallback calculations
+  - All KPI cards now accurately reflect filtered selections
+- **Testing Results**: 
+  - ✅ Single selection: $42.5M → matches selected client
+  - ✅ Multi-selection: $75.5M (2 clients), $106.3M (3 clients) → accurate sums
+  - ✅ 30-day change percentage calculated on filtered data only
+  - ✅ Chart data remains consistent with KPI values
+
 ### CSV Download Feature
 - Added comprehensive CSV export functionality for filtered datasets
 - Download button in header shows real-time row count
