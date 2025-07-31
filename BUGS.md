@@ -182,32 +182,7 @@ Update the account_details list comprehension to include all calculated fields:
                    'ytd_change': acc['ytd_change']} for acc in account_details]
 ```
 
-### Important Context for Future Development
-
-#### Chart Formatting (January 2025)
-- Y-axis values now display in millions format (e.g., "$42.5M")
-- Both 90-day and 3-year charts use horizontal x-axis labels
-- Added `formatCurrencyInMillions()` function for chart formatting
-- Original `formatCurrency()` retained for tables and KPIs
-
-#### Recent Major Features
-1. **CSV Download**: Comprehensive export with all daily granular data
-2. **Multi-Selection**: Tableau-like behavior across all tables
-3. **Text Filters**: Fund ticker, client name, account number filtering
-4. **KPI Metrics**: Backend-calculated metrics for accurate filtering
-
-#### Key Files and Endpoints
-- **Backend**: `/root/CET/app.py` - Flask API with QTD/YTD calculations
-- **Frontend**: `/root/CET/static/js/app.js` - Selection state management
-- **Endpoints with QTD/YTD**: 
-  - `/api/overview`
-  - `/api/client/<client_id>`
-  - `/api/fund/<fund_name>`
-  - `/api/client/<client_id>/fund/<fund_name>` (BROKEN)
-  - `/api/date/<date_string>`
-  - `/api/account/<account_id>`
-
-#### Database Schema
-- `client_mapping`: account_id → client_name, client_id (UUID)
-- `account_balances`: Daily fund-level balances per account
-- All IDs use UUIDs per global instructions
+### Additional Notes
+- The SQL query correctly calculates the QTD/YTD values using CTEs
+- Other similar endpoints (`/api/overview`, `/api/client/<id>`, `/api/date/<date>`) include these fields correctly
+- This appears to be an oversight in the response construction for this specific endpoint
