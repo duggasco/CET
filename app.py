@@ -1204,10 +1204,12 @@ def get_client_fund_data(client_id, fund_name):
             'qtd_change': fund_data.get('qtd_change'),
             'ytd_change': fund_data.get('ytd_change')
         },
-        'account_details': [{'account_id': acc['account_id'], 
+        'account_details': [{'account_id': acc['account_id'],
                            'client_name': client_name,
                            'fund_name': fund_name,
-                           'balance': acc['balance']} for acc in account_details]
+                           'balance': acc['balance'],
+                           'qtd_change': acc.get('qtd_change'),
+                           'ytd_change': acc.get('ytd_change')} for acc in account_details]
     })
 
 @app.route('/api/date/<date_string>')

@@ -103,9 +103,9 @@ The bug was fixed by adding comprehensive text filter support to individual API 
 - **Filter indicator correct**: Shows combined selections and text filters properly
 - **No regressions**: All existing functionality remains intact
 
-## 🔍 ACTIVE: Account QTD/YTD Values Showing as N/A in Client-Fund View
+## ✅ RESOLVED: Account QTD/YTD Values Showing as N/A in Client-Fund View
 
-**Status**: Active (Not Fixed)  
+**Status**: Fixed  
 **Priority**: Medium  
 **Discovered**: January 2025  
 **Reporter**: User testing  
@@ -182,7 +182,37 @@ Update the account_details list comprehension to include all calculated fields:
                    'ytd_change': acc['ytd_change']} for acc in account_details]
 ```
 
+### Resolution Details
+**Fixed**: January 2025  
+**Fix Author**: Claude Code collaboration  
+
+**Solution Implemented**: Updated the `account_details` list comprehension in the `/api/client/<client_id>/fund/<fund_name>` endpoint to include the calculated `qtd_change` and `ytd_change` fields.
+
+**Code Change** (app.py:1207-1212):
+```python
+# Before (missing QTD/YTD fields):
+'account_details': [{'account_id': acc['account_id'], 
+                   'client_name': client_name,
+                   'fund_name': fund_name,
+                   'balance': acc['balance']} for acc in account_details]
+
+# After (includes QTD/YTD fields):
+'account_details': [{'account_id': acc['account_id'],
+                   'client_name': client_name,
+                   'fund_name': fund_name,
+                   'balance': acc['balance'],
+                   'qtd_change': acc.get('qtd_change'),
+                   'ytd_change': acc.get('ytd_change')} for acc in account_details]
+```
+
+**Testing Verification**:
+- API now returns QTD/YTD values (e.g., 0.24%, 2.10%)  
+- Frontend displays formatted percentages (+0.2%, +2.1%) instead of "N/A"
+- Tested Capital Management + Prime Money Market scenario successfully
+- No regressions in other views (overview, single client, single fund)
+
 ### Additional Notes
-- The SQL query correctly calculates the QTD/YTD values using CTEs
-- Other similar endpoints (`/api/overview`, `/api/client/<id>`, `/api/date/<date>`) include these fields correctly
-- This appears to be an oversight in the response construction for this specific endpoint
+- Used `.get()` method for safe field access to prevent KeyError
+- SQL query was already calculating the values correctly using CTEs
+- Frontend `formatPercentage()` function handles the values properly
+- Fix maintains consistency with other similar endpoints
