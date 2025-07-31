@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeTableHandlers();
     initializeFilterInputs();
     initializeFilterToggle();
+    updateDownloadButton();
     loadOverviewData();
     
     // Add document click listener for clearing selections
@@ -2318,4 +2319,98 @@ function formatPercentage(value) {
     const prefix = value > 0 ? '+' : '';
     const className = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
     return `<span class="${className}">${prefix}${formatted}%</span>`;
+}
+
+// CSV Download Functions
+// Helper function to build download parameters
+function getDownloadParams() {
+    const params = new URLSearchParams();
+    
+    selectionState.clients.forEach(clientId => params.append('client_id', clientId));
+    selectionState.funds.forEach(fundName => params.append('fund_name', fundName));
+    selectionState.accounts.forEach(accountId => params.append('account_id', accountId));
+    
+    if (textFilters.fundTicker) params.append('fund_ticker', textFilters.fundTicker);
+    if (textFilters.clientName) params.append('client_name', textFilters.clientName);
+    if (textFilters.accountNumber) params.append('account_number', textFilters.accountNumber);
+    
+    if (currentFilter.type === 'date' && currentFilter.value) {
+        params.append('date', currentFilter.value);
+    }
+    
+    return params;
+}
+
+async function fetchDownloadCount() {
+    try {
+        const params = getDownloadParams();
+        const response = await fetch(`/api/download_csv/count?${params.toString()}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error fetching count:', data.error);
+            return null;
+        }
+        
+        return data.count;
+    } catch (error) {
+        console.error('Error fetching download count:', error);
+        return null;
+    }
+}
+
+function updateDownloadButton() {
+    const downloadBtn = document.getElementById('download-csv-btn');
+    const downloadCount = document.getElementById('download-count');
+    
+    if (!downloadBtn || !downloadCount) return;
+    
+    // Show loading state
+    downloadCount.textContent = 'Loading...';
+    downloadBtn.disabled = true;
+    
+    fetchDownloadCount().then(count => {
+        if (count !== null) {
+            downloadCount.textContent = `${count.toLocaleString()} rows`;
+            downloadBtn.disabled = false;
+            
+            // Add warning styling if large
+            if (count > 100000) {
+                downloadCount.classList.add('warning');
+            } else {
+                downloadCount.classList.remove('warning');
+            }
+        } else {
+            downloadCount.textContent = 'Error';
+            downloadBtn.disabled = true;
+        }
+    });
+}
+
+function downloadCSV() {
+    const downloadBtn = document.getElementById('download-csv-btn');
+    const originalText = downloadBtn.textContent;
+    
+    // Show downloading state
+    downloadBtn.textContent = 'Downloading...';
+    downloadBtn.disabled = true;
+    
+    // Build download URL
+    const params = getDownloadParams();
+    
+    // Trigger download
+    window.location.href = `/api/download_csv?${params.toString()}`;
+    
+    // Reset button after a delay
+    setTimeout(() => {
+        downloadBtn.textContent = originalText;
+        downloadBtn.disabled = false;
+    }, 2000);
+}
+
+// Update existing updateDataBasedOnSelections to also update download count
+const originalUpdateData = updateDataBasedOnSelections;
+updateDataBasedOnSelections = function() {
+    originalUpdateData();
+    updateDownloadButton();
 }

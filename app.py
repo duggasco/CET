@@ -1,8 +1,11 @@
-from flask import Flask, jsonify, render_template, request, make_response
+from flask import Flask, jsonify, render_template, request, make_response, Response
 import sqlite3
 from datetime import datetime, timedelta, date
 import json
 import time
+import csv
+from io import StringIO
+from contextlib import closing
 
 app = Flask(__name__)
 
@@ -1319,6 +1322,244 @@ def get_date_data(date_string):
         'fund_balances': fund_balances,
         'account_details': account_details
     })
+
+def _build_csv_where_clause(args):
+    """Build WHERE clause for CSV download queries"""
+    where_clauses = []
+    params = []
+    
+    # Multi-selection filters
+    client_ids = args.getlist('client_id')
+    fund_names = args.getlist('fund_name')
+    account_ids = args.getlist('account_id')
+    
+    if client_ids:
+        placeholders = ','.join(['?' for _ in range(len(client_ids))])
+        where_clauses.append(f'cm.client_id IN ({placeholders})')
+        params.extend(client_ids)
+    
+    if fund_names:
+        placeholders = ','.join(['?' for _ in range(len(fund_names))])
+        where_clauses.append(f'ab.fund_name IN ({placeholders})')
+        params.extend(fund_names)
+        
+    if account_ids:
+        placeholders = ','.join(['?' for _ in range(len(account_ids))])
+        where_clauses.append(f'ab.account_id IN ({placeholders})')
+        params.extend(account_ids)
+    
+    # Text filters
+    filters = get_text_filters()
+    if filters['fund_ticker_filter']:
+        where_clauses.append('ab.fund_name LIKE ?')
+        params.append(f"%{filters['fund_ticker_filter']}%")
+    
+    if filters['client_name_filter']:
+        where_clauses.append('cm.client_name LIKE ?')
+        params.append(f"%{filters['client_name_filter']}%")
+        
+    if filters['account_number_filter']:
+        where_clauses.append('ab.account_id LIKE ?')
+        params.append(f"%{filters['account_number_filter']}%")
+    
+    where_sql = ' AND '.join(where_clauses) if where_clauses else '1=1'
+    return where_sql, params
+
+def _get_historical_balances(conn, account_fund_pairs, target_date):
+    """Pre-fetch quarter and year start balances for QTD/YTD calculations"""
+    if not account_fund_pairs:
+        return {}
+    
+    # Calculate boundaries
+    quarter_start = date(target_date.year, ((target_date.month - 1) // 3) * 3 + 1, 1)
+    year_start = date(target_date.year, 1, 1)
+    
+    # Build query for historical balances - SQLite doesn't support VALUES clause well
+    # Instead, we'll use a simpler approach
+    query = '''
+        SELECT 
+            ab.account_id,
+            ab.fund_name,
+            ab.balance_date,
+            ab.balance
+        FROM account_balances ab
+        WHERE ab.balance_date IN (?, ?)
+    '''
+    
+    params = [quarter_start, year_start]
+    
+    results = {}
+    cursor = conn.cursor()
+    for row in cursor.execute(query, params):
+        key = (row['account_id'], row['fund_name'])
+        balance_date = row['balance_date']
+        
+        if key not in results:
+            results[key] = {'qtd_balance': 0, 'ytd_balance': 0}
+        
+        if balance_date == str(quarter_start):
+            results[key]['qtd_balance'] = row['balance'] or 0
+        elif balance_date == str(year_start):
+            results[key]['ytd_balance'] = row['balance'] or 0
+    
+    return results
+
+@app.route('/api/download_csv/count')
+def get_download_count():
+    """Get count of rows that would be in CSV"""
+    try:
+        with closing(get_db_connection()) as conn:
+            cursor = conn.cursor()
+            where_sql, params = _build_csv_where_clause(request.args)
+            
+            query = f'''
+                SELECT COUNT(*) as count
+                FROM account_balances ab
+                JOIN client_mapping cm ON ab.account_id = cm.account_id
+                WHERE {where_sql}
+            '''
+            
+            result = cursor.execute(query, params).fetchone()
+            return jsonify({'count': result['count']})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/download_csv')
+def download_csv():
+    """Download filtered data as CSV"""
+    MAX_ROWS = 1000000  # 1M row limit
+    
+    try:
+        # First check row count
+        count_response = get_download_count()
+        count_data = count_response.get_json()
+        
+        if 'error' in count_data:
+            return count_response
+        
+        row_count = count_data['count']
+        if row_count > MAX_ROWS:
+            return jsonify({
+                'error': f'Download exceeds {MAX_ROWS:,} rows ({row_count:,} rows). Please apply more filters.'
+            }), 413
+        
+        # Don't use context manager here - we need connection to stay open for generator
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        where_sql, params = _build_csv_where_clause(request.args)
+        
+        # Determine as_of_date
+        selected_date = request.args.get('date')
+        if selected_date:
+            as_of_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
+        else:
+            as_of_date = date.today()
+        
+        # Get unique account/fund pairs for historical data fetch
+        pairs_query = f'''
+            SELECT DISTINCT ab.account_id, ab.fund_name
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            WHERE {where_sql}
+        '''
+        
+        account_fund_pairs = [(row['account_id'], row['fund_name']) 
+                              for row in cursor.execute(pairs_query, params)]
+        
+        # Pre-fetch historical balances
+        historical_balances = _get_historical_balances(conn, account_fund_pairs, as_of_date)
+        
+        # Main query
+        query = f'''
+            SELECT 
+                ab.balance_date,
+                cm.client_name,
+                cm.client_id,
+                ab.account_id,
+                ab.fund_name,
+                ab.balance
+            FROM account_balances ab
+            JOIN client_mapping cm ON ab.account_id = cm.account_id
+            WHERE {where_sql}
+            ORDER BY ab.balance_date DESC, cm.client_name, ab.account_id, ab.fund_name
+        '''
+        
+        def generate_csv():
+            try:
+                output = StringIO()
+                writer = csv.writer(output)
+                writer.writerow([
+                    'Date', 'Client Name', 'Client ID', 'Account ID', 
+                    'Fund Name', 'Balance', 'QTD%', 'YTD%', 
+                    'QTD $Change', 'YTD $Change', 'As of Date'
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+                
+                for row in cursor.execute(query, params):
+                    key = (row['account_id'], row['fund_name'])
+                    hist = historical_balances.get(key, {'qtd_balance': 0, 'ytd_balance': 0})
+                    
+                    current_balance = row['balance']
+                    qtd_balance = hist['qtd_balance']
+                    ytd_balance = hist['ytd_balance']
+                    
+                    # Calculate changes
+                    qtd_change = current_balance - qtd_balance
+                    ytd_change = current_balance - ytd_balance
+                    
+                    # Calculate percentages (avoid division by zero)
+                    qtd_pct = (qtd_change / qtd_balance * 100) if qtd_balance != 0 else 0
+                    ytd_pct = (ytd_change / ytd_balance * 100) if ytd_balance != 0 else 0
+                    
+                    writer.writerow([
+                        row['balance_date'],
+                        row['client_name'],
+                        row['client_id'],
+                        row['account_id'],
+                        row['fund_name'],
+                        f"${current_balance:,.2f}",
+                        f"{qtd_pct:.2f}%",
+                        f"{ytd_pct:.2f}%",
+                        f"${qtd_change:,.2f}",
+                        f"${ytd_change:,.2f}",
+                        as_of_date.strftime('%Y-%m-%d')
+                    ])
+                    
+                    yield output.getvalue()
+                    output.seek(0)
+                    output.truncate(0)
+                    
+            except Exception as e:
+                yield f"Error generating CSV: {str(e)}\n"
+            finally:
+                # Close connection after generator completes
+                conn.close()
+        
+        # Generate filename
+        filter_parts = []
+        if request.args.getlist('client_id'):
+            filter_parts.append(f"{len(request.args.getlist('client_id'))}clients")
+        if request.args.getlist('fund_name'):
+            filter_parts.append(f"{len(request.args.getlist('fund_name'))}funds")
+        if request.args.getlist('account_id'):
+            filter_parts.append(f"{len(request.args.getlist('account_id'))}accounts")
+        
+        filter_summary = '_'.join(filter_parts) if filter_parts else 'all_data'
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"financial_data_{filter_summary}_{timestamp}.csv"
+        
+        return Response(
+            generate_csv(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename={filename}'
+            }
+        )
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     import os

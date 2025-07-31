@@ -1099,3 +1099,48 @@ body.mobile #accountTable th:nth-child(4),
 body.mobile #accountTable td:nth-child(4) {
     width: 17.5%;
 }
+
+/* CSV Download Styles */
+.download-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 20px;
+}
+
+.download-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: #0085ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.download-btn:hover {
+    background-color: #0066cc;
+}
+
+.download-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.download-btn .icon {
+    fill: currentColor;
+}
+
+.download-count {
+    font-size: 12px;
+    color: #676879;
+}
+
+.download-count.warning {
+    color: #ff3d57;
+    font-weight: bold;
+}

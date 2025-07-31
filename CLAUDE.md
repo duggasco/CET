@@ -44,6 +44,8 @@ This is a Flask-based web application for exploring money market mutual fund cli
   - `/api/account/<account_id>/fund/<fund_name>`: Account details filtered by fund
   - `/api/client/<client_id>/fund/<fund_name>`: Client-fund combination data with QTD/YTD
   - `/api/date/<date_string>`: Data for a specific date with QTD/YTD relative to that date
+  - `/api/download_csv`: Streams filtered data as CSV with all daily records
+  - `/api/download_csv/count`: Returns count of rows that would be in CSV
 
 - **QTD/YTD Calculations**: 
   - Current data: Calculated from actual quarter/year start dates
@@ -201,6 +203,16 @@ Two main tables in SQLite:
 - **Database regeneration**: Run `python database.py` to create fresh sample data
 
 ## Recent Updates
+
+### CSV Download Feature
+- Added comprehensive CSV export functionality for filtered datasets
+- Download button in header shows real-time row count
+- Exports all daily granular data with complete balance history
+- CSV includes: Date, Client Name/ID, Account ID, Fund Name, Balance, QTD%, YTD%, QTD/YTD $Change, As of Date
+- Dynamic filename reflects current filters (e.g., `financial_data_3clients_2funds_20250731_150404.csv`)
+- Streaming response handles large datasets efficiently (up to 1M rows)
+- Pre-fetches historical data for accurate QTD/YTD calculations
+- Respects all active filters: multi-selections, text filters, and date selections
 
 ### Table Stability Improvements
 - Fixed table layout implementation prevents column width changes

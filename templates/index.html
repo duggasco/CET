@@ -21,6 +21,15 @@
             <div class="header-right">
                 <div id="current-filter" class="filter-indicator">Viewing: All Clients - All Funds</div>
                 <button id="clear-filters" class="clear-filters-btn" style="display: none;">Clear All Filters</button>
+                <div class="download-section">
+                    <button id="download-csv-btn" onclick="downloadCSV()" class="download-btn">
+                        <svg class="icon" viewBox="0 0 24 24" width="16" height="16">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
+                        Download CSV
+                    </button>
+                    <span id="download-count" class="download-count">Loading...</span>
+                </div>
             </div>
         </header>
 
