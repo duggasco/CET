@@ -274,3 +274,23 @@ The multiple table selection functionality has been thoroughly tested with Playw
 - Zero balances are handled properly with "$0" display
 - QTD/YTD calculations remain accurate with filtered data
 - Selection visual persistence maintained during data updates
+
+### Text Filter Preservation Bug Fix (January 2025)
+- **Problem Resolved**: Fixed critical bug where text filters were lost when clicking on table rows (fund, client, or account selections)
+- **Root Cause**: Individual API endpoints (`/api/client/<id>`, `/api/fund/<name>`) were ignoring text filter query parameters
+- **Backend Solution**: 
+  - Added comprehensive text filter support to `/api/client/<client_id>` and `/api/fund/<fund_name>` endpoints
+  - Implemented `get_text_filters()` processing and `build_filter_clause()` application to all queries
+  - Added conditional JOINs for performance (only join additional tables when filters require them)
+  - Applied smart filter exclusion (e.g., exclude client_name filter in client endpoint since client_id already filters)
+  - Updated all SQL queries: history queries, balance calculations, QTD/YTD computations
+- **Key Features**:
+  - **Filter Persistence**: Text filters now remain active when clicking table rows
+  - **Intersection Filtering**: Proper data intersection (e.g., "Acme Corp" + "Municipal Money Market" = $5.75M, not $54.98M)
+  - **Performance Optimized**: Conditional JOINs only added when needed by active filters
+  - **Comprehensive Coverage**: All endpoint queries respect text filters (90-day history, 3-year history, balances)
+- **Testing Results**: 
+  - ✅ Original bug scenario: $5.75M intersection instead of $54.98M all-clients result
+  - ✅ Filter indicator accuracy: Shows "1 Fund | Client: Acme" correctly
+  - ✅ KPI calculations: Total AUM, client count, fund count all reflect filtered data
+  - ✅ Multi-selection support: Works with combined table selections + text filters
