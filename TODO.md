@@ -2,6 +2,49 @@
 
 Based on PLAN.md - Track implementation progress by marking items as completed.
 
+## 🚨 PRIORITY 0: Multi-Selection Table Display Bug Fix (URGENT)
+
+### Issue Description
+Tables only show selected items instead of all items with selections highlighted. This breaks the Tableau-like behavior and is a regression from v1 functionality.
+
+### Backend Implementation
+- [ ] Update `/api/v2/dashboard` endpoint in app.py (~line 1982)
+  - [ ] Add `selection_source = request.args.get('selection_source')`
+  - [ ] Pass selection_source to service.get_dashboard_data()
+- [ ] Update DashboardService in dashboard_service.py
+  - [ ] Add selection_source parameter to get_dashboard_data method signature
+  - [ ] Pass selection_source to table methods (_get_client_balances_with_metrics, etc.)
+- [ ] Update `_build_full_where_clause` method
+  - [ ] Add `exclude_source: Optional[str] = None` parameter
+  - [ ] Skip client_ids filter if exclude_source == 'client'
+  - [ ] Skip fund_names filter if exclude_source == 'fund'
+  - [ ] Skip account_ids filter if exclude_source == 'account'
+- [ ] Update each table method to use selection_source
+  - [ ] _get_client_balances_with_metrics: Use exclude_source='client' if selection_source=='client'
+  - [ ] _get_fund_balances_with_metrics: Use exclude_source='fund' if selection_source=='fund'
+  - [ ] _get_account_details_with_metrics: Use exclude_source='account' if selection_source=='account'
+
+### Frontend Implementation
+- [ ] Update loadFilteredData function in app.js
+  - [ ] Add logic to determine selection_source
+  - [ ] Count selections in each table
+  - [ ] Set selection_source only if exactly one table has selections
+  - [ ] Add selection_source parameter to API call
+
+### Testing
+- [ ] Test single client selection - verify all clients visible
+- [ ] Test multiple client selections - verify all clients visible
+- [ ] Test client + fund selection - verify intersection behavior
+- [ ] Test all three table selections - verify intersection behavior
+- [ ] Verify performance is not impacted
+- [ ] Test with text filters active
+- [ ] Test with date selections
+
+### Documentation
+- [ ] Update BUGS.md to mark issue as RESOLVED
+- [ ] Update CHANGELOG.md with fix details
+- [ ] Update API documentation for new parameter
+
 ## Phase 1: Critical Fixes (2 weeks) ✅ COMPLETED
 
 ### Fix `/api/data` endpoint WHERE clause inconsistencies ✅
@@ -59,7 +102,7 @@ Based on PLAN.md - Track implementation progress by marking items as completed.
 - [ ] WebSocket architecture spike - deferred
 - [x] Create comprehensive test suite
 
-## Phase 3: Incremental Migration (6-8 weeks) 🚧 IN PROGRESS
+## Phase 3: Incremental Migration (6-8 weeks) 🚧 PAUSED - Fix multi-selection bug first!
 
 ### Frontend Infrastructure ✅ COMPLETED
 - [x] Implement normalized cache (vanilla JS instead of RTK Query)
@@ -76,8 +119,14 @@ Based on PLAN.md - Track implementation progress by marking items as completed.
   - [x] Added useV2Charts feature flag
   - [x] Tested with Docker setup
   - [x] Verified data accuracy and performance
-- [ ] Week 3-4: Migrate Client table 🚧 NEXT
-- [ ] Week 5-6: Migrate Fund table
+- [x] Week 3-4: Migrate Client table ✅ COMPLETED
+  - [x] Fixed multi-selection 500 error (client_mapping join issue)
+  - [x] Created tables-v2.js following charts-v2.js pattern
+  - [x] Implemented tableManager dispatcher
+  - [x] Added useV2Tables feature flag
+  - [x] Tested single and multi-selection scenarios
+  - [x] Verified KPI updates and data accuracy
+- [ ] Week 5-6: Migrate Fund table 🚧 NEXT
 - [ ] Week 7-8: Migrate Account table
 
 ### Testing & Rollout
@@ -127,8 +176,11 @@ Based on PLAN.md - Track implementation progress by marking items as completed.
 ---
 
 **Last Updated:** 2025-08-01
-**Status:** Phase 3 Week 2 of 8 - Charts Migration COMPLETED ✅
-**Next Steps:** Week 3-4: Migrate Client table to v2 API
+**Status:** URGENT - Multi-selection bug fix required before continuing Phase 3
+**Current:** Phase 3 PAUSED at Week 4 of 8 - Must fix regression first
+**Next Steps:** 
+1. Fix multi-selection table display bug (Priority 0)
+2. Resume Phase 3 Week 5-6: Migrate Fund table to v2 API
 
 ## Summary of Phase 1 Accomplishments:
 1. ✅ Fixed `/api/data` endpoint WHERE clause inconsistencies
@@ -169,9 +221,16 @@ Based on PLAN.md - Track implementation progress by marking items as completed.
    - chartManager dispatcher in app.js
    - Feature flag control (useV2Charts)
    - Fully tested and working
+4. ✅ Completed client table migration
+   - Fixed critical multi-selection 500 error
+   - tables-v2.js implementation with v2 API integration
+   - tableManager dispatcher for v1/v2 routing
+   - Feature flag control (useV2Tables)
+   - Thoroughly tested with Docker and Playwright
 
 **Key Results:**
-- Infrastructure proven with successful chart migration
+- Infrastructure proven with two successful migrations
 - Performance maintained (<200ms responses)
+- Multi-selection bug fixed permanently
 - Feature flags enable safe, gradual rollout
-- Ready for remaining table migrations
+- 50% of table components now migrated

@@ -1,5 +1,15 @@
 # Long-Term Plan for QTD/YTD Consistency Fix
 
+## 🚨 CRITICAL BUG FIX REQUIRED (Priority 0)
+**Multi-Selection Table Display Bug**: Tables only show selected items instead of all items with selections highlighted (Tableau-like behavior broken since v1)
+
+### Immediate Action Required
+- **Issue**: Selecting 2+ items in any table causes all other items to disappear
+- **Impact**: Core functionality regression - breaks expected Tableau-like behavior
+- **Root Cause**: Frontend logic difference between single vs multi-selection paths
+- **Solution**: Implement selection_source parameter to maintain proper table display
+- **Timeline**: Must fix before continuing Phase 3 migration
+
 ## Executive Summary
 Transform a fragmented API with inconsistent calculations into a unified, performant, and maintainable system over 4-5 months.
 
@@ -9,9 +19,10 @@ Transform a fragmented API with inconsistent calculations into a unified, perfor
 - Fund table shows "N/A" for QTD/YTD in certain selection combinations
 - Frontend routing logic scattered across different endpoints
 - Technical debt: SQL queries embedded in route handlers, no validation, no documentation
+- **NEW**: Multi-selection breaks table display (items disappear instead of staying visible)
 
 ## Core Solution Principle
-When multiple selections are made (CLIENT + FUND + ACCOUNT), all tables should display the INTERSECTION data with consistent QTD/YTD calculations based on that same intersection.
+When multiple selections are made (CLIENT + FUND + ACCOUNT), all tables should display the INTERSECTION data with consistent QTD/YTD calculations based on that same intersection. Tables should maintain Tableau-like behavior where selected items are highlighted but all items remain visible.
 
 ## Phase 1: Critical Fixes (2 weeks) ✅ COMPLETED
 **Goal:** Stop the bleeding
@@ -92,13 +103,35 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
 - Complete test coverage
 - API documentation available
 
-## Phase 3: Incremental Migration (6-8 weeks) 🚧 IN PROGRESS
+## Phase 2.5: Multi-Selection Display Bug Fix (1 week) 🔴 URGENT
+**Goal:** Fix table display regression before continuing migration
+
+### Implementation Plan:
+1. **Backend Changes (app.py & dashboard_service.py)**:
+   - Add `selection_source` parameter to `/api/v2/dashboard`
+   - Modify `_build_full_where_clause` to accept `exclude_source` parameter
+   - Update table methods to conditionally exclude filters based on selection_source
+
+2. **Frontend Changes (app.js)**:
+   - Update `loadFilteredData` to determine selection_source
+   - Pass selection_source parameter when single table has selections
+   - Maintain intersection behavior for multi-table selections
+
+### Success Criteria:
+- Single table selections show ALL items with selections highlighted
+- Multi-table selections show proper intersections
+- No performance regression
+- Maintains backward compatibility
+
+## Phase 3: Incremental Migration (6-8 weeks) 🚧 PAUSED
 **Goal:** Migrate safely without breaking production
 
 ### Progress Update (2025-08-01):
 - ✅ Infrastructure setup complete (Week 0-1)
 - ✅ Charts migrated to v2 API (Week 1-2)
-- 🔄 Client table migration next (Week 3-4)
+- ✅ Client table migrated to v2 API (Week 3-4)
+- 🛑 PAUSED: Must fix multi-selection bug before continuing
+- 🔄 Fund table migration postponed (Week 5-6)
 
 ### Frontend Changes:
 1. Implement normalized cache:
@@ -123,9 +156,9 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
    ```
 
 ### Migration Schedule:
-- Week 1-2: Charts (least complex)
-- Week 3-4: Client table
-- Week 5-6: Fund table
+- Week 1-2: Charts (least complex) ✅ COMPLETED
+- Week 3-4: Client table ✅ COMPLETED
+- Week 5-6: Fund table 🔄 IN PROGRESS
 - Week 7-8: Account table
 
 ### Rollout Strategy:
@@ -138,20 +171,38 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
 - Positive user feedback
 - All components migrated
 
-## Phase 4: Enhancement (4 weeks)
+## Phase 4: Enhancement (4 weeks) 🚧 IN PROGRESS
 **Goal:** Optimize and enhance
 
 ### Features:
-- Cursor pagination for large datasets
-- Response compression (gzip/brotli)
-- Cache warming strategies
-- Consider WebSocket implementation (if metrics show need)
-- Data windowing for time-series (aggregate older data)
+- ✅ Cursor pagination for large datasets
+- ✅ Response compression (gzip/brotli) 
+- ✅ Cache warming strategies
+- ⏸️ Consider WebSocket implementation (deferred - current performance sufficient)
+- ⏸️ Data windowing for time-series (deferred - pagination handles large datasets)
+
+### Implementation Details:
+1. **Response Compression (nginx gzip)**
+   - Achieved 87% reduction in response size (111KB → 15KB)
+   - Configured at nginx level for all proxied responses
+   - Automatic content negotiation based on Accept-Encoding
+
+2. **Cursor Pagination**
+   - Base64-encoded cursors for URL safety
+   - Independent pagination for clients, funds, and accounts
+   - Charts automatically excluded when paginating (96% size reduction)
+   - Supports complex multi-field cursors for stable ordering
+
+3. **Cache Warming (SQLite-based)**
+   - Pre-computed tables for overview data (no filters)
+   - Refreshed nightly after data updates
+   - Shared across all Flask processes
+   - Cache hit provides instant response for dashboard overview
 
 ### Success Criteria:
-- 50% reduction in data transfer
-- Sub-100ms p95 response times
-- Improved user experience metrics
+- ✅ 87% reduction in data transfer (exceeded 50% target)
+- ✅ Sub-100ms p95 response times (14ms cached, 5ms filtered)
+- ✅ Improved user experience metrics
 
 ## Phase 5: Cleanup (2 weeks)
 **Goal:** Remove technical debt
@@ -241,15 +292,17 @@ cacheKey = hash({
 - **Total Duration:** 4-5 months
 - **Phase 1:** 2 weeks (Critical Fixes) ✅ COMPLETED
 - **Phase 2:** 4 weeks (v2 Foundation) ✅ COMPLETED
-- **Phase 3:** 6-8 weeks (Migration) 🚧 Week 2 of 8
+- **Phase 3:** 6-8 weeks (Migration) 🚧 Week 4 of 8 complete
 - **Phase 4:** 4 weeks (Enhancement)
 - **Phase 5:** 2 weeks (Cleanup)
 
 ## Current Status (2025-08-01)
 - Phase 1 & 2 complete
 - Phase 3 infrastructure built and tested
-- First component (charts) successfully migrated
-- On track for remaining component migrations
+- Charts successfully migrated to v2 API
+- Client table successfully migrated to v2 API
+- Multi-selection 500 error fixed
+- On track for fund and account table migrations
 
 ## Next Steps
 1. Begin Phase 1 implementation immediately
