@@ -401,3 +401,95 @@ Update the account_details list comprehension to include all calculated fields:
 - SQL query was already calculating the values correctly using CTEs
 - Frontend `formatPercentage()` function handles the values properly
 - Fix maintains consistency with other similar endpoints
+
+## 🐛 ACTIVE: Table Multi-Selection Limiting Bug
+
+**Status**: Active - Solution designed, implementation pending  
+**Priority**: High  
+**Discovered**: January 2025  
+**Reporter**: User observation  
+**Solution Designers**: Claude Code + Gemini AI collaboration  
+
+### Problem Description
+When users select 2 or more items in any table (clients, funds, or accounts), all other unselected items in that table disappear. This breaks the expected Tableau-like multi-selection behavior where selected items should remain highlighted while all items stay visible.
+
+### Reproduction Steps
+1. Navigate to overview page
+2. Click on 2 clients in the Client Balances table
+3. **BUG**: Only the 2 selected clients remain visible; all other clients disappear
+4. Same behavior occurs with Fund Summary and Account Details tables
+
+### Expected vs Actual Behavior
+- **Expected (Tableau-like)**:
+  - Source table: Shows ALL items with selected ones highlighted
+  - Other tables: Show filtered data based on selections
+- **Actual**:
+  - Source table: Shows ONLY selected items
+  - Other tables: Show filtered data (correct)
+
+### Root Cause Analysis
+The issue is in the frontend logic in `app.js`:
+
+1. **Single Selection Path**: Calls endpoint like `/api/client/<id>` which returns full client list
+2. **Multi-Selection Path**: Calls `/api/data` endpoint with filters, which returns only filtered data
+3. **Table Rendering**: Tables faithfully render whatever data they receive
+
+The v2 API implementation (`services/dashboard_service.py`) already uses consistent filtering - there's no `exclude_filters` logic. The bug is purely in how the frontend handles the response data.
+
+### Technical Context
+```javascript
+// In updateDataBasedOnSelections (app.js)
+if (hasClientSelection && !hasFundSelection && !hasAccountSelection) {
+    // Single selection - loads full client data
+    loadClientData(firstClientId, firstClientName);
+} else if (hasClientSelection || hasFundSelection || hasAccountSelection) {
+    // Multi-selection - loads filtered data only
+    loadFilteredData();
+}
+```
+
+### Solution Design
+Add a `selection_source` parameter to identify which table is the source of selections:
+
+**Backend Changes**:
+1. Add `selection_source` parameter to `/api/v2/dashboard` endpoint
+2. Modify `_build_full_where_clause` to exclude filters for the source table
+3. Update table methods to use modified where clause based on selection_source
+
+**Frontend Changes**:
+```javascript
+// Determine selection source (only for single-table selections)
+let selectionSource = null;
+const selectionCounts = [
+    selectionState.clients.size > 0 ? 1 : 0,
+    selectionState.funds.size > 0 ? 1 : 0,
+    selectionState.accounts.size > 0 ? 1 : 0
+].reduce((a, b) => a + b, 0);
+
+if (selectionCounts === 1) {
+    if (selectionState.clients.size > 0) selectionSource = 'client';
+    else if (selectionState.funds.size > 0) selectionSource = 'fund';
+    else if (selectionState.accounts.size > 0) selectionSource = 'account';
+}
+```
+
+### Implementation Plan
+1. **app.py**: Add selection_source parameter extraction and pass to service
+2. **dashboard_service.py**: 
+   - Add selection_source parameter to get_dashboard_data
+   - Update _build_full_where_clause to accept exclude_source parameter
+   - Modify table methods to conditionally exclude filters
+3. **app.js**: Update loadFilteredData to determine and send selection_source
+
+### Key Benefits
+- Implements proper Tableau-like behavior
+- Minimal code changes required
+- Single API call (efficient)
+- Maintains backward compatibility
+- Clear, simple logic
+
+### Testing Plan
+- Single table selections show all items with highlights
+- Multi-table selections show proper intersections
+- Text filters remain active during selections
+- Performance remains acceptable with large datasets
