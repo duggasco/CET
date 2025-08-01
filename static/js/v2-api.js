@@ -68,6 +68,11 @@ const v2Api = {
             params.as_of_date = selections.date;
         }
 
+        // Handle selection source
+        if (selections.selectionSource) {
+            params.selection_source = selections.selectionSource;
+        }
+
         return params;
     },
 

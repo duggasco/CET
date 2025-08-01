@@ -56,29 +56,33 @@ class DashboardService:
         # Get all component data with pagination support
         pagination_info = {}
         
-        # Get client balances with pagination
-        client_data, client_pagination = self._get_client_balances_with_metrics_paginated(
-            filters, ref_date, page_size, client_cursor, selection_source
-        ) if page_size else (self._get_client_balances_with_metrics(filters, ref_date, selection_source), None)
+        # Pass selection_source to all methods and let each method decide 
+        # whether to exclude its own filters for Tableau-like behavior
         
-        if client_pagination:
-            pagination_info["client_balances"] = client_pagination
-        
-        # Get fund balances with pagination
-        fund_data, fund_pagination = self._get_fund_balances_with_metrics_paginated(
-            filters, ref_date, page_size, fund_cursor, selection_source
-        ) if page_size else (self._get_fund_balances_with_metrics(filters, ref_date, selection_source), None)
-        
-        if fund_pagination:
-            pagination_info["fund_balances"] = fund_pagination
-        
-        # Get account details with pagination
-        account_data, account_pagination = self._get_account_details_with_metrics_paginated(
-            filters, ref_date, page_size, account_cursor, selection_source
-        ) if page_size else (self._get_account_details_with_metrics(filters, ref_date, selection_source), None)
-        
-        if account_pagination:
-            pagination_info["account_details"] = account_pagination
+        if page_size:
+            # Paginated responses
+            client_data, client_pagination = self._get_client_balances_with_metrics_paginated(
+                filters, ref_date, page_size, client_cursor, selection_source
+            )
+            fund_data, fund_pagination = self._get_fund_balances_with_metrics_paginated(
+                filters, ref_date, page_size, fund_cursor, selection_source
+            )
+            account_data, account_pagination = self._get_account_details_with_metrics_paginated(
+                filters, ref_date, page_size, account_cursor, selection_source
+            )
+            
+            # Store pagination info
+            if client_pagination:
+                pagination_info["client_balances"] = client_pagination
+            if fund_pagination:
+                pagination_info["fund_balances"] = fund_pagination
+            if account_pagination:
+                pagination_info["account_details"] = account_pagination
+        else:
+            # Regular responses
+            client_data = self._get_client_balances_with_metrics(filters, ref_date, selection_source)
+            fund_data = self._get_fund_balances_with_metrics(filters, ref_date, selection_source)
+            account_data = self._get_account_details_with_metrics(filters, ref_date, selection_source)
         
         result = {
             "metadata": {

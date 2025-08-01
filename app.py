@@ -1643,6 +1643,7 @@ def get_filtered_data():
     client_name_filter = request.args.get('client_name', '').strip()
     account_number_filter = request.args.get('account_number', '').strip()
     
+    
     # Validate that at least one filter is provided
     all_filters = (client_ids + fund_names + account_ids +
                    [fund_ticker_filter, client_name_filter, account_number_filter])

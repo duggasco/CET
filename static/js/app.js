@@ -21,15 +21,17 @@ let textFilters = {
 
 // Get current selection parameters for v2 API
 function getCurrentSelectionParams() {
-    // Determine selection source (only for single-table selections)
+    // Determine selection source (when selections are from a single table only)
     let selectionSource = null;
     const hasClients = selectionState.clients.size > 0;
     const hasFunds = selectionState.funds.size > 0;
     const hasAccounts = selectionState.accounts.size > 0;
     
-    const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
+    // Count how many TABLES have selections (not how many items are selected)
+    const tablesWithSelections = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
     
-    if (selectionCount === 1) {
+    // If only one table has selections (regardless of how many items), set selection source
+    if (tablesWithSelections === 1) {
         if (hasClients) selectionSource = 'client';
         else if (hasFunds) selectionSource = 'fund';
         else if (hasAccounts) selectionSource = 'account';
@@ -1725,10 +1727,10 @@ async function loadFilteredData() {
             else if (hasAccounts) selectionSource = 'account';
         }
         
-        // Use the new /api/data endpoint
+        // Use the v2 API endpoint for proper Tableau-like behavior
         const queryString = buildQueryString(true);
         const selectionParam = selectionSource ? `&selection_source=${selectionSource}` : '';
-        const url = `/api/data${queryString}${selectionParam}`;
+        const url = `/api/v2/dashboard${queryString}${selectionParam}`;
         
         const response = await fetch(url);
         const data = await response.json();
@@ -1739,10 +1741,19 @@ async function loadFilteredData() {
         }
         
         // Update filter type for indicator
-        currentFilter = { type: 'multi', filters: data.filters };
+        currentFilter = { type: 'multi', filters: data.metadata ? data.metadata.filters_applied : data.filters };
         
-        // Update all UI components
-        chartManager.update(data);
+        // Update all UI components - handle both v1 and v2 API formats
+        if (data.charts) {
+            // v2 API format
+            chartManager.update({
+                recent_history: data.charts.recent_history,
+                long_term_history: data.charts.long_term_history
+            });
+        } else {
+            // v1 API format
+            chartManager.update(data);
+        }
         tableManager.updateClientTable(data.client_balances);
         tableManager.updateFundTable(data.fund_balances);
         tableManager.updateAccountTable(data.account_details);
