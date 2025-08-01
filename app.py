@@ -6,6 +6,7 @@ import time
 import csv
 from io import StringIO
 from contextlib import closing
+from services.dashboard_service import DashboardService
 
 app = Flask(__name__)
 
@@ -1119,6 +1120,11 @@ def get_client_fund_data(client_id, fund_name):
     client_row = cursor.fetchone()
     client_name = dict(client_row)['client_name'] if client_row else 'Unknown'
     
+    # Get fund ticker
+    cursor.execute('SELECT fund_ticker FROM funds WHERE fund_name = ? LIMIT 1', (fund_name,))
+    fund_row = cursor.fetchone()
+    fund_ticker = dict(fund_row)['fund_ticker'] if fund_row else 'UNKNOWN'
+    
     # Calculate QTD and YTD
     today = end_date
     current_quarter = (today.month - 1) // 3
@@ -1238,18 +1244,20 @@ def get_client_fund_data(client_id, fund_name):
     return jsonify({
         'recent_history': recent_history,
         'long_term_history': long_term_history,
-        'client_balance': {
+        'client_balances': [{
             'client_name': client_name,
             'client_id': client_id,
-            'total_balance': fund_data.get('total_balance', 0)
-        },
-        'fund_balance': {
-            'fund_name': fund_name,
             'total_balance': fund_data.get('total_balance', 0),
-            'account_count': fund_data.get('account_count', 0),
             'qtd_change': fund_data.get('qtd_change'),
             'ytd_change': fund_data.get('ytd_change')
-        },
+        }],
+        'fund_balances': [{
+            'fund_name': fund_name,
+            'fund_ticker': fund_ticker,
+            'total_balance': fund_data.get('total_balance', 0),
+            'qtd_change': fund_data.get('qtd_change'),
+            'ytd_change': fund_data.get('ytd_change')
+        }],
         'account_details': [{'account_id': acc['account_id'],
                            'client_name': client_name,
                            'fund_name': fund_name,
@@ -1729,7 +1737,7 @@ def get_filtered_data():
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             LEFT JOIN funds f ON ab.fund_name = f.fund_name
             WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
-            {client_where_clause}
+            {full_where_clause}
             GROUP BY cm.client_name, cm.client_id
         ),
         {qtd_ytd_client_sql}
@@ -1753,7 +1761,7 @@ def get_filtered_data():
         ORDER BY cb.current_balance DESC
     '''
     
-    client_query_params = client_params + [qtd_start.strftime('%Y-%m-%d')] + full_params + [ytd_start.strftime('%Y-%m-%d')] + full_params
+    client_query_params = full_params + [qtd_start.strftime('%Y-%m-%d')] + full_params + [ytd_start.strftime('%Y-%m-%d')] + full_params
     cursor.execute(client_query, client_query_params)
     client_balances = [dict(row) for row in cursor.fetchall()]
     
@@ -1769,7 +1777,7 @@ def get_filtered_data():
             JOIN client_mapping cm ON ab.account_id = cm.account_id
             LEFT JOIN funds f ON ab.fund_name = f.fund_name
             WHERE ab.balance_date = (SELECT MAX(balance_date) FROM account_balances)
-            {fund_where_clause}
+            {full_where_clause}
             GROUP BY ab.fund_name, f.fund_ticker
         ),
         {qtd_ytd_fund_sql}
@@ -1793,7 +1801,7 @@ def get_filtered_data():
         ORDER BY cb.current_balance DESC
     '''
     
-    fund_query_params = fund_params + [qtd_start.strftime('%Y-%m-%d')] + full_params + [ytd_start.strftime('%Y-%m-%d')] + full_params
+    fund_query_params = full_params + [qtd_start.strftime('%Y-%m-%d')] + full_params + [ytd_start.strftime('%Y-%m-%d')] + full_params
     cursor.execute(fund_query, fund_query_params)
     fund_balances = [dict(row) for row in cursor.fetchall()]
     
@@ -1914,6 +1922,106 @@ def get_filtered_data():
     }
     
     return jsonify(response_data)
+
+@app.route('/api/v2/dashboard', methods=['GET'])
+def dashboard_v2():
+    """
+    Unified dashboard API endpoint v2.
+    
+    Query parameters:
+    - client_id: Filter by client ID (can be repeated for multiple)
+    - fund_name: Filter by fund name (can be repeated for multiple)
+    - account_id: Filter by account ID (can be repeated for multiple)
+    - date: Reference date for data (YYYY-MM-DD format)
+    - client_name: Text filter for client name (partial match)
+    - fund_ticker: Text filter for fund ticker (prefix match)
+    - account_number: Text filter for account number (partial match)
+    
+    Returns:
+    - Unified response with all dashboard data including:
+      - client_balances: List of clients with balances and QTD/YTD metrics
+      - fund_balances: List of funds with balances and QTD/YTD metrics
+      - account_details: List of accounts with balances and QTD/YTD metrics
+      - charts: Historical data for 90-day and 3-year charts
+      - kpi_metrics: Dashboard KPIs (total AUM, counts, etc.)
+      - metadata: Applied filters and reference date
+    """
+    try:
+        # Extract list parameters
+        client_ids = request.args.getlist('client_id')
+        fund_names = request.args.getlist('fund_name')
+        account_ids = request.args.getlist('account_id')
+        
+        # Validate UUID format for client_ids
+        if client_ids:
+            import re
+            uuid_pattern = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+            for client_id in client_ids:
+                if not uuid_pattern.match(client_id):
+                    return jsonify({
+                        "type": "/errors/invalid-parameter",
+                        "title": "Invalid Client ID Format",
+                        "status": 400,
+                        "detail": f"Client ID '{client_id}' is not a valid UUID",
+                        "instance": request.path
+                    }), 400
+        
+        # Extract single parameters
+        date = request.args.get('date')
+        
+        # Validate date format if provided
+        if date:
+            try:
+                datetime.strptime(date, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({
+                    "type": "/errors/invalid-parameter",
+                    "title": "Invalid Date Format",
+                    "status": 400,
+                    "detail": f"Date '{date}' is not in valid YYYY-MM-DD format",
+                    "instance": request.path
+                }), 400
+        
+        # Extract text filters
+        text_filters = {}
+        if request.args.get('client_name'):
+            text_filters['client_name'] = request.args.get('client_name')
+        if request.args.get('fund_ticker'):
+            text_filters['fund_ticker'] = request.args.get('fund_ticker')
+        if request.args.get('account_number'):
+            text_filters['account_number'] = request.args.get('account_number')
+        
+        # Create service and get data
+        service = DashboardService()
+        data = service.get_dashboard_data(
+            client_ids=client_ids if client_ids else None,
+            fund_names=fund_names if fund_names else None,
+            account_ids=account_ids if account_ids else None,
+            date=date,
+            text_filters=text_filters if text_filters else None
+        )
+        
+        return jsonify(data)
+        
+    except sqlite3.DatabaseError as e:
+        app.logger.error(f"Database error in v2 dashboard: {str(e)}")
+        return jsonify({
+            "type": "/errors/database-error",
+            "title": "Database Error",
+            "status": 503,
+            "detail": "Unable to retrieve data from database",
+            "instance": request.path
+        }), 503
+        
+    except Exception as e:
+        app.logger.error(f"Unexpected error in v2 dashboard: {str(e)}")
+        return jsonify({
+            "type": "/errors/internal-error",
+            "title": "Internal Server Error", 
+            "status": 500,
+            "detail": "An unexpected error occurred while processing your request",
+            "instance": request.path
+        }), 500
 
 @app.route('/api/download_csv/count')
 def get_download_count():

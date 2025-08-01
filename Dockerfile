@@ -20,6 +20,8 @@ COPY app.py .
 COPY database.py .
 COPY static ./static
 COPY templates ./templates
+COPY repositories ./repositories
+COPY services ./services
 
 # Create database on container start
 RUN python database.py

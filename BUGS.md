@@ -90,6 +90,61 @@ if client_ids or fund_names or account_ids:
 - **NULL handling**: ✅ New entities show "N/A" instead of misleading 0%
 - **Performance**: ✅ No degradation observed
 
+## ✅ RESOLVED: JavaScript Error with Client-Fund Endpoint Response Structure
+
+**Status**: Fixed  
+**Priority**: High  
+**Discovered**: January 2025  
+**Reporter**: User testing during QTD/YTD consistency fix implementation  
+**Fixed**: January 2025  
+**Fix Author**: Claude Code  
+
+### Problem Description
+When selecting CLIENT+FUND combination, JavaScript error occurred: "Cannot read properties of undefined (reading 'client_name')" preventing the dashboard from loading the filtered data properly.
+
+### Reproduction Steps
+1. Navigate to overview page
+2. Click on any client (e.g., "Capital Management")
+3. Click on any fund (e.g., "Prime Money Market")
+4. **BUG**: JavaScript error in console, tables don't update properly
+
+### Root Cause Analysis
+The `/api/client/<id>/fund/<name>` endpoint was updated to return arrays (`client_balances`, `fund_balances`) instead of single objects (`client_balance`, `fund_balance`) for consistency with other endpoints. However, the frontend JavaScript was still expecting the old singular object structure.
+
+### Solution Implemented
+**Frontend Changes (app.js:1628-1637)**:
+```javascript
+// Before - expecting singular objects:
+updateClientTable([{ 
+    client_name: data.client_balance.client_name, 
+    client_id: data.client_balance.client_id, 
+    total_balance: data.client_balance.total_balance,
+    qtd_change: data.fund_balance.qtd_change,
+    ytd_change: data.fund_balance.ytd_change
+}]);
+
+// After - handling arrays:
+if (data.client_balances && data.client_balances.length > 0) {
+    updateClientTable(data.client_balances);
+}
+if (data.fund_balances && data.fund_balances.length > 0) {
+    updateFundTable(data.fund_balances);
+}
+```
+
+Also removed redundant fund table update that was fetching from `/api/client/<id>` endpoint.
+
+### Testing Results
+- ✅ CLIENT+FUND selection now works without JavaScript errors
+- ✅ All tables update correctly with filtered data
+- ✅ QTD/YTD values remain consistent across all tables
+- ✅ Example: Capital Management + Corporate Bond Fund shows QTD: +0.2%, YTD: +2.0% in all tables
+
+### Impact Resolved
+- ✅ **JavaScript Errors**: No more console errors when selecting CLIENT+FUND
+- ✅ **Data Display**: Tables properly show intersection data
+- ✅ **User Experience**: Smooth navigation between different selection combinations
+
 ## 🔍 ACTIVE: Fund Summary Occasionally Shows N/A for QTD/YTD
 
 **Status**: Active - Root cause identified, fix pending  

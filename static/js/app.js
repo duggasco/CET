@@ -1626,18 +1626,17 @@ async function loadClientFundData(clientId, clientName, fundName) {
         updateLongTermChart(data.long_term_history);
         
         // Update tables with filtered data
-        updateClientTable([{ 
-            client_name: data.client_balance.client_name, 
-            client_id: data.client_balance.client_id, 
-            total_balance: data.client_balance.total_balance,
-            qtd_change: data.fund_balance.qtd_change,
-            ytd_change: data.fund_balance.ytd_change
-        }]);
+        // Backend now returns arrays instead of single objects
+        if (data.client_balances && data.client_balances.length > 0) {
+            updateClientTable(data.client_balances);
+        }
         
-        // Show all funds for this client
-        const clientResponse = await fetch(`/api/client/${clientId}` + buildQueryString());
-        const clientData = await clientResponse.json();
-        updateFundTable(clientData.fund_balances);
+        // Update fund table with the single fund
+        if (data.fund_balances && data.fund_balances.length > 0) {
+            updateFundTable(data.fund_balances);
+        }
+        
+        // Note: Fund table already updated above with the specific fund from client-fund endpoint
         
         updateAccountTable(data.account_details);
         updateKPICards(data);
