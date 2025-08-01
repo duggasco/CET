@@ -9,14 +9,14 @@ Tables only show selected items instead of all items with selections highlighted
 
 ### ⚠️ CRITICAL: Fix V2 endpoints we're migrating TO, not deprecated ones!
 
-### Backend Implementation - V2 Architecture
+### Backend Implementation - V2 Architecture ✅ COMPLETED
 
 #### `/api/v2/dashboard` endpoint (app.py ~line 1982)
-- [ ] Add selection_source parameter extraction
+- [x] Add selection_source parameter extraction
   ```python
   selection_source = request.args.get('selection_source')
   ```
-- [ ] Pass selection_source to dashboard service (~line 2027)
+- [x] Pass selection_source to dashboard service (~line 2027)
   ```python
   data = service.get_dashboard_data(
       # ... existing params ...
@@ -25,40 +25,37 @@ Tables only show selected items instead of all items with selections highlighted
   ```
 
 #### DashboardService (dashboard_service.py)
-- [ ] Update get_dashboard_data method signature
-  - [ ] Add `selection_source: Optional[str] = None` parameter
-- [ ] Pass selection_source to table methods (~lines 59-77)
-  - [ ] Update _get_client_balances_with_metrics call
-  - [ ] Update _get_fund_balances_with_metrics call
-  - [ ] Update _get_account_details_with_metrics call
-- [ ] Update _build_full_where_clause method (~line 432)
-  - [ ] Add `exclude_source: Optional[str] = None` parameter
-  - [ ] Skip client_ids filter if exclude_source == 'client'
-  - [ ] Skip fund_names filter if exclude_source == 'fund'
-  - [ ] Skip account_ids filter if exclude_source == 'account'
-- [ ] Update each table method to use selection_source
-  - [ ] _get_client_balances_with_metrics: Use exclude_source='client' if selection_source=='client'
-  - [ ] _get_fund_balances_with_metrics: Use exclude_source='fund' if selection_source=='fund'
-  - [ ] _get_account_details_with_metrics: Use exclude_source='account' if selection_source=='account'
+- [x] Update get_dashboard_data method signature
+  - [x] Add `selection_source: Optional[str] = None` parameter
+- [x] Pass selection_source to table methods (~lines 59-77)
+  - [x] Update _get_client_balances_with_metrics call
+  - [x] Update _get_fund_balances_with_metrics call
+  - [x] Update _get_account_details_with_metrics call
+- [x] Update _build_full_where_clause method (~line 432)
+  - [x] Add `exclude_source: Optional[str] = None` parameter
+  - [x] Skip client_ids filter if exclude_source == 'client'
+  - [x] Skip fund_names filter if exclude_source == 'fund'
+  - [x] Skip account_ids filter if exclude_source == 'account'
+- [x] Update each table method to use selection_source
+  - [x] _get_client_balances_with_metrics: Use exclude_source='client' if selection_source=='client'
+  - [x] _get_fund_balances_with_metrics: Use exclude_source='fund' if selection_source=='fund'
+  - [x] _get_account_details_with_metrics: Use exclude_source='account' if selection_source=='account'
+- [x] Update paginated methods to accept selection_source parameter
+  - [x] _get_client_balances_with_metrics_paginated
+  - [x] _get_fund_balances_with_metrics_paginated
+  - [x] _get_account_details_with_metrics_paginated
 
-### Frontend Implementation (app.js - loadFilteredData function ~line 1697)
-- [ ] Add selection source determination logic after try block
-  ```javascript
-  let selectionSource = null;
-  const hasClients = selectionState.clients.size > 0;
-  const hasFunds = selectionState.funds.size > 0;
-  const hasAccounts = selectionState.accounts.size > 0;
-  const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
-  
-  if (selectionCount === 1) {
-      if (hasClients) selectionSource = 'client';
-      else if (hasFunds) selectionSource = 'fund';
-      else if (hasAccounts) selectionSource = 'account';
-  }
-  ```
-- [ ] Update URL construction to include selection_source
-  - [ ] Verify frontend is using v2 API via apiWrapper/tables-v2.js
-  - [ ] Selection source will flow through apiWrapper to v2 endpoint
+### Frontend Implementation ✅ PARTIALLY COMPLETED
+
+#### Direct API calls (app.js - loadFilteredData function ~line 1697)
+- [x] Add selection source determination logic after try block
+- [x] Update URL construction to include selection_source for old /api/data endpoint
+
+#### V2 API Integration (for tables using apiWrapper)
+- [x] Update getCurrentSelectionParams to include selectionSource (~line 23)
+- [x] Update apiWrapper.loadDataV2 to pass selectionSource through (~line 63)
+- [ ] Update v2Api.buildQueryParams to include selection_source parameter
+  - [ ] Add selection_source to query params if present in selections object
 
 ### Testing
 - [ ] Test single client selection - verify all clients visible

@@ -103,8 +103,26 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
 - Complete test coverage
 - API documentation available
 
-## Phase 2.5: Multi-Selection Display Bug Fix (1 week) 🔴 URGENT
+## Phase 2.5: Multi-Selection Display Bug Fix (1 week) 🟡 IN PROGRESS
 **Goal:** Fix table display regression before continuing migration
+
+### Implementation Status (as of 2025-08-01):
+✅ Backend implementation complete:
+- Added selection_source parameter to /api/v2/dashboard endpoint
+- Updated DashboardService to accept and use selection_source
+- Modified _build_full_where_clause to conditionally exclude filters
+- Updated all table methods (regular and paginated) to use selection_source
+
+🟡 Frontend implementation in progress:
+- ✅ Updated loadFilteredData for old /api/data endpoint
+- ✅ Updated getCurrentSelectionParams to include selectionSource
+- ✅ Updated apiWrapper to pass selectionSource through
+- ⏳ Need to update v2Api.buildQueryParams to include selection_source
+
+⏳ Testing pending:
+- Need to test single table selections
+- Need to test multi-table selections
+- Need to verify v2 API flow
 
 ### Final Implementation Plan (V2 Architecture):
 

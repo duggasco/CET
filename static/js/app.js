@@ -21,13 +21,28 @@ let textFilters = {
 
 // Get current selection parameters for v2 API
 function getCurrentSelectionParams() {
+    // Determine selection source (only for single-table selections)
+    let selectionSource = null;
+    const hasClients = selectionState.clients.size > 0;
+    const hasFunds = selectionState.funds.size > 0;
+    const hasAccounts = selectionState.accounts.size > 0;
+    
+    const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
+    
+    if (selectionCount === 1) {
+        if (hasClients) selectionSource = 'client';
+        else if (hasFunds) selectionSource = 'fund';
+        else if (hasAccounts) selectionSource = 'account';
+    }
+    
     return {
         clientIds: Array.from(selectionState.clients),
         fundNames: Array.from(selectionState.funds),
         accountIds: Array.from(selectionState.accounts),
         textFilters: textFilters,
         date: currentFilter.type === 'date' ? currentFilter.value : null,
-        queryString: buildQueryString()
+        queryString: buildQueryString(),
+        selectionSource: selectionSource
     };
 }
 
@@ -68,6 +83,72 @@ const chartManager = {
             // Clear v1 charts
             updateRecentChart([]);
             updateLongTermChart([]);
+        }
+    }
+};
+
+// Table manager to handle v1/v2 table routing
+const tableManager = {
+    // Update tables based on feature flag
+    update: async function(data) {
+        if (window.featureFlags?.useV2Tables) {
+            // V2 tables fetch their own data
+            console.log('[Table Manager] Using v2 tables');
+            const params = getCurrentSelectionParams();
+            return await tablesV2.updateTables(params);
+        } else {
+            // V1 tables use passed data
+            console.log('[Table Manager] Using v1 tables');
+            updateClientTable(data.client_balances || []);
+            updateFundTable(data.fund_balances || []);
+            updateAccountTable(data.account_details || []);
+            return data;
+        }
+    },
+    
+    // Initialize tables
+    init: function() {
+        if (window.featureFlags?.useV2Tables) {
+            console.log('[Table Manager] Initializing v2 tables');
+            tablesV2.init();
+        }
+        // V1 tables don't need initialization
+    },
+    
+    // Clear tables
+    clear: function() {
+        if (window.featureFlags?.useV2Tables) {
+            tablesV2.clearTables();
+        } else {
+            // Clear v1 tables
+            updateClientTable([]);
+            updateFundTable([]);
+            updateAccountTable([]);
+        }
+    },
+    
+    // Update individual tables (for backwards compatibility)
+    updateClientTable: function(data) {
+        if (window.featureFlags?.useV2Tables) {
+            tablesV2.updateClientTable(data);
+        } else {
+            updateClientTable(data);
+        }
+    },
+    
+    updateFundTable: function(data) {
+        if (window.featureFlags?.useV2Tables) {
+            tablesV2.updateFundTable(data);
+        } else {
+            updateFundTable(data);
+        }
+    },
+    
+    updateAccountTable: function(data) {
+        if (window.featureFlags?.useV2Tables) {
+            tablesV2.updateAccountTable(data);
+        } else {
+            updateAccountTable(data);
         }
     }
 };
@@ -642,9 +723,9 @@ async function loadOverviewData() {
         updateFilterIndicator('All Clients - All Funds');
         updateKPICards(data);
         chartManager.update(data);
-        updateClientTable(data.client_balances);
-        updateFundTable(data.fund_balances);
-        updateAccountTable(data.account_details);
+        tableManager.updateClientTable(data.client_balances);
+        tableManager.updateFundTable(data.fund_balances);
+        tableManager.updateAccountTable(data.account_details);
         
         // Update CSV row count
         updateDownloadButton();
@@ -735,14 +816,14 @@ async function loadDateData(dateString) {
         
         // For tables, show full data if no selections, filtered data if selections exist
         if (hasClientSelection || hasFundSelection || hasAccountSelection) {
-            updateClientTable(data.client_balances);
-            updateFundTable(data.fund_balances);
-            updateAccountTable(data.account_details);
+            tableManager.updateClientTable(data.client_balances);
+            tableManager.updateFundTable(data.fund_balances);
+            tableManager.updateAccountTable(data.account_details);
         } else {
             // Show all data for the date
-            updateClientTable(fullDateData.client_balances);
-            updateFundTable(fullDateData.fund_balances);
-            updateAccountTable(fullDateData.account_details);
+            tableManager.updateClientTable(fullDateData.client_balances);
+            tableManager.updateFundTable(fullDateData.fund_balances);
+            tableManager.updateAccountTable(fullDateData.account_details);
         }
         
         // Update CSV row count
@@ -764,14 +845,14 @@ async function loadClientData(clientId, clientName) {
         // Update tables with filtered data
         // Keep full client list but highlight selected
         if (allData && allData.client_balances) {
-            updateClientTable(allData.client_balances);
+            tableManager.updateClientTable(allData.client_balances);
         }
         
         // Show funds for selected client
-        updateFundTable(data.fund_balances);
+        tableManager.updateFundTable(data.fund_balances);
         
         // Show accounts for selected client
-        updateAccountTable(data.account_details.map(acc => ({ ...acc, client_name: clientName })));
+        tableManager.updateAccountTable(data.account_details.map(acc => ({ ...acc, client_name: clientName })));
         
         // Update KPIs with client data
         updateKPICards(data);
@@ -791,15 +872,15 @@ async function loadFundData(fundName) {
         chartManager.update(data);
         
         // Show clients that have this fund
-        updateClientTable(data.client_balances);
+        tableManager.updateClientTable(data.client_balances);
         
         // Keep full fund list but highlight selected
         if (allData && allData.fund_balances) {
-            updateFundTable(allData.fund_balances);
+            tableManager.updateFundTable(allData.fund_balances);
         }
         
         // Show accounts with this fund
-        updateAccountTable(data.account_details.map(acc => ({ ...acc, fund_name: fundName })));
+        tableManager.updateAccountTable(data.account_details.map(acc => ({ ...acc, fund_name: fundName })));
         
         // Update KPIs with fund data
         updateKPICards(data);
@@ -842,7 +923,7 @@ async function loadAccountData(accountId) {
             if (client) {
                 // Calculate total balance for this account across all funds
                 const accountTotal = data.fund_allocation.reduce((sum, fund) => sum + fund.balance, 0);
-                updateClientTable([{
+                tableManager.updateClientTable([{
                     ...client,
                     total_balance: accountTotal
                 }]);
@@ -850,7 +931,7 @@ async function loadAccountData(accountId) {
         }
         
         // Show funds in this account
-        updateFundTable(data.fund_allocation.map(f => ({ 
+        tableManager.updateFundTable(data.fund_allocation.map(f => ({ 
             ...f, 
             total_balance: f.balance, 
             account_count: 1,
@@ -867,23 +948,23 @@ async function loadAccountData(accountId) {
             // Fetch the filtered account list
             const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const filteredData = await filteredResponse.json();
-            updateAccountTable(filteredData.account_details);
+            tableManager.updateAccountTable(filteredData.account_details);
         } else if (selectionState.clients.size > 0) {
             // If only client is selected, show accounts for that client
             const selectedClientId = Array.from(selectionState.clients)[0];
             const clientResponse = await fetch(`/api/client/${selectedClientId}` + buildQueryString());
             const clientData = await clientResponse.json();
-            updateAccountTable(clientData.account_details);
+            tableManager.updateAccountTable(clientData.account_details);
         } else if (selectionState.funds.size > 0) {
             // If only fund is selected, show accounts for that fund
             const selectedFundName = Array.from(selectionState.funds)[0];
             const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const fundData = await fundResponse.json();
-            updateAccountTable(fundData.account_details);
+            tableManager.updateAccountTable(fundData.account_details);
         } else {
             // No other selections, show all accounts
             if (allData && allData.account_details) {
-                updateAccountTable(allData.account_details);
+                tableManager.updateAccountTable(allData.account_details);
             }
         }
         
@@ -927,7 +1008,7 @@ async function loadAccountDataForFund(accountId, fundName) {
             const client = allData.client_balances.find(c => c.client_id === clientId);
             if (client) {
                 // Show client with only the account-fund specific balance
-                updateClientTable([{
+                tableManager.updateClientTable([{
                     ...client,
                     total_balance: data.fund_allocation[0]?.balance || 0
                 }]);
@@ -935,7 +1016,7 @@ async function loadAccountDataForFund(accountId, fundName) {
         }
         
         // Show only the selected fund for this account
-        updateFundTable([{ 
+        tableManager.updateFundTable([{ 
             fund_name: fundName,
             total_balance: data.fund_allocation[0]?.balance || 0,
             account_count: 1,
@@ -952,17 +1033,17 @@ async function loadAccountDataForFund(accountId, fundName) {
             // Fetch the filtered account list
             const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const filteredData = await filteredResponse.json();
-            updateAccountTable(filteredData.account_details);
+            tableManager.updateAccountTable(filteredData.account_details);
         } else if (selectionState.funds.size > 0) {
             // If only fund is selected, show accounts for that fund
             const selectedFundName = Array.from(selectionState.funds)[0];
             const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const fundData = await fundResponse.json();
-            updateAccountTable(fundData.account_details);
+            tableManager.updateAccountTable(fundData.account_details);
         } else {
             // No other selections, show all accounts
             if (allData && allData.account_details) {
-                updateAccountTable(allData.account_details);
+                tableManager.updateAccountTable(allData.account_details);
             }
         }
         
@@ -1630,9 +1711,24 @@ async function updateDataBasedOnSelections() {
 // Load filtered data based on multiple selections
 async function loadFilteredData() {
     try {
+        // Determine selection source (only for single-table selections)
+        let selectionSource = null;
+        const hasClients = selectionState.clients.size > 0;
+        const hasFunds = selectionState.funds.size > 0;
+        const hasAccounts = selectionState.accounts.size > 0;
+        
+        const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
+        
+        if (selectionCount === 1) {
+            if (hasClients) selectionSource = 'client';
+            else if (hasFunds) selectionSource = 'fund';
+            else if (hasAccounts) selectionSource = 'account';
+        }
+        
         // Use the new /api/data endpoint
         const queryString = buildQueryString(true);
-        const url = `/api/data${queryString}`;
+        const selectionParam = selectionSource ? `&selection_source=${selectionSource}` : '';
+        const url = `/api/data${queryString}${selectionParam}`;
         
         const response = await fetch(url);
         const data = await response.json();
@@ -1647,9 +1743,9 @@ async function loadFilteredData() {
         
         // Update all UI components
         chartManager.update(data);
-        updateClientTable(data.client_balances);
-        updateFundTable(data.fund_balances);
-        updateAccountTable(data.account_details);
+        tableManager.updateClientTable(data.client_balances);
+        tableManager.updateFundTable(data.fund_balances);
+        tableManager.updateAccountTable(data.account_details);
         updateKPICards(data);
         
         // Update CSV row count
@@ -1678,17 +1774,17 @@ async function loadClientFundData(clientId, clientName, fundName) {
         // Update tables with filtered data
         // Backend now returns arrays instead of single objects
         if (data.client_balances && data.client_balances.length > 0) {
-            updateClientTable(data.client_balances);
+            tableManager.updateClientTable(data.client_balances);
         }
         
         // Update fund table with the single fund
         if (data.fund_balances && data.fund_balances.length > 0) {
-            updateFundTable(data.fund_balances);
+            tableManager.updateFundTable(data.fund_balances);
         }
         
         // Note: Fund table already updated above with the specific fund from client-fund endpoint
         
-        updateAccountTable(data.account_details);
+        tableManager.updateAccountTable(data.account_details);
         updateKPICards(data);
         
         // Update CSV row count

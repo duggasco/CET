@@ -22,9 +22,13 @@ COPY static ./static
 COPY templates ./templates
 COPY repositories ./repositories
 COPY services ./services
+COPY cache_tables.sql .
+COPY warm_cache.py .
 
-# Create database on container start
-RUN python database.py
+# Create database and cache tables
+RUN python database.py && \
+    python -c "import sqlite3; conn = sqlite3.connect('client_exploration.db'); conn.executescript(open('cache_tables.sql').read()); conn.close()" && \
+    python warm_cache.py
 
 # Expose port (default)
 EXPOSE 9095

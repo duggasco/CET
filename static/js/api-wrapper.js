@@ -59,7 +59,8 @@ const apiWrapper = {
                 funds: params.fundNames ? new Set(params.fundNames) : selectionState.funds,
                 accounts: params.accountIds ? new Set(params.accountIds) : selectionState.accounts,
                 textFilters: params.textFilters || getTextFilters(),
-                date: params.date
+                date: params.date,
+                selectionSource: params.selectionSource
             };
             
             // Use the v2Api fetchDataV2 function

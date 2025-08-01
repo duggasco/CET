@@ -42,7 +42,7 @@ def generate_qtd_ytd_cte_sql(entity_type, group_by_field, where_clause):
         SQL string fragment with two CTEs
     """
     client_mapping_join = ''
-    if entity_type in ['client', 'account']:
+    if entity_type in ['client', 'account', 'fund']:
         client_mapping_join = 'JOIN client_mapping cm ON ab.account_id = cm.account_id'
     
     return f'''
@@ -1980,6 +1980,7 @@ def dashboard_v2():
         
         # Extract single parameters
         date = request.args.get('date')
+        selection_source = request.args.get('selection_source')
         
         # Validate date format if provided
         if date:
@@ -2003,14 +2004,39 @@ def dashboard_v2():
         if request.args.get('account_number'):
             text_filters['account_number'] = request.args.get('account_number')
         
+        # Extract pagination parameters
+        page_size = request.args.get('page_size', type=int)
+        if page_size and (page_size < 1 or page_size > 1000):
+            return jsonify({
+                "type": "/errors/invalid-parameter",
+                "title": "Invalid Page Size",
+                "status": 400,
+                "detail": f"Page size must be between 1 and 1000, got {page_size}",
+                "instance": request.path
+            }), 400
+        
+        client_cursor = request.args.get('client_cursor')
+        fund_cursor = request.args.get('fund_cursor')
+        account_cursor = request.args.get('account_cursor')
+        
         # Create service and get data
         service = DashboardService()
+        
+        # When paginating, exclude charts by default to reduce payload size
+        include_charts = page_size is None
+        
         data = service.get_dashboard_data(
             client_ids=client_ids if client_ids else None,
             fund_names=fund_names if fund_names else None,
             account_ids=account_ids if account_ids else None,
             date=date,
-            text_filters=text_filters if text_filters else None
+            text_filters=text_filters if text_filters else None,
+            page_size=page_size,
+            client_cursor=client_cursor,
+            fund_cursor=fund_cursor,
+            account_cursor=account_cursor,
+            include_charts=include_charts,
+            selection_source=selection_source
         )
         
         return jsonify(data)

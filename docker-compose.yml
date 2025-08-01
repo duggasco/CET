@@ -9,7 +9,7 @@ services:
       - "9095:9095"
     environment:
       - FLASK_PORT=9095
-      - FEATURE_FLAGS={"useV2DashboardApi":false,"useV2Charts":false}
+      - FEATURE_FLAGS={"useV2DashboardApi":false,"useV2Charts":false,"useV2Tables":false}
       - V2_ROLLOUT_PERCENTAGE=10
     volumes:
       - ./static:/app/static
@@ -47,7 +47,7 @@ services:
       - "9097:9095"
     environment:
       - FLASK_PORT=9095
-      - FEATURE_FLAGS={"useV2DashboardApi":true, "useV2Charts":true}
+      - FEATURE_FLAGS={"useV2DashboardApi":true, "useV2Charts":true, "useV2Tables":true}
       - V2_ROLLOUT_PERCENTAGE=100
     volumes:
       - ./static:/app/static
