@@ -1,5 +1,166 @@
 # BUGS.md - Known Issues and Bug Reports
 
+## ✅ RESOLVED: Docker v2 Deployment Issues
+
+**Status**: RESOLVED - Fixed on 2025-08-01  
+**Priority**: High  
+**Discovered**: August 2025  
+**Reporter**: User during Docker testing  
+**Fixed**: August 2025  
+**Fix Author**: Claude Code  
+
+### Issue Description
+When running with Docker and v2 feature flags enabled, two critical issues occurred:
+1. Charts displayed "Invalid Date" at the bottom axis labels
+2. KPIs reverted to full AUM ($248M) when selecting multiple clients instead of showing filtered total
+
+### Root Causes
+1. Missing `useV2DashboardApi` flag in Docker environment variables - only `useV2Tables` and `useV2Charts` were set
+2. TypeError when calling `.toFixed()` on undefined values in KPI calculations
+3. apiWrapper not using v2 API despite feature flags being set
+
+### Resolution
+1. **Updated run.sh** to include all v2 feature flags:
+   ```bash
+   -e 'FEATURE_FLAGS={"useV2Tables":true,"useV2Charts":true,"useV2DashboardApi":true}'
+   ```
+2. **Added safety checks** in updateKPICards function (app.js:415, 422):
+   - Check for undefined/null/NaN before calling `.toFixed()`
+   - Default to '0.0' if value is invalid
+3. **Fixed v2Api.transformToV1Format** to properly extract chart data from nested `v2Data.charts` structure
+
+### Testing Results
+- Charts now display dates correctly with v2 API
+- KPIs show correct filtered values for multi-selections
+- No more TypeError in console
+- All v2 features working properly in Docker deployment
+
+## ✅ RESOLVED: KPI/Chart Values Revert to Full AUM During Multi-Selection
+
+**Status**: RESOLVED - Fixed on 2025-08-01
+**Priority**: High
+**Discovered**: August 2025
+**Reporter**: User observation after multi-selection bug fix
+**Fixed**: August 2025
+**Fix Author**: Claude Code with solution design from Gemini AI collaboration
+
+### Problem Description
+When making multiple selections with v2 tables enabled, KPI cards and charts briefly show the correct filtered values before reverting to the full AUM (unfiltered) values. The tables continue to show filtered data correctly, but KPIs and charts revert.
+
+### Reproduction Steps
+1. Navigate to overview page with v2 tables enabled
+2. Select 2 or more clients in the Client Balances table
+3. Observe the Total AUM in KPI cards
+4. **BUG**: KPI briefly shows filtered total (e.g., $75M for 2 clients) then reverts to full AUM ($530M+)
+
+### Expected vs Actual Behavior
+- **Expected**: KPIs and charts remain showing filtered totals after multi-selection
+- **Actual**: 
+  - KPIs show correct filtered value for ~0.5-1 second
+  - Then revert to showing full unfiltered AUM
+  - Tables continue showing filtered data correctly
+
+### Root Cause Analysis
+The issue is caused by **double API calls** when v2 tables are enabled:
+
+1. **First API Call** (from `loadFilteredData()`):
+   ```javascript
+   // Fetches filtered data correctly
+   const data = await fetch('/api/v2/dashboard?client_ids=...');
+   updateKPICards(data); // Shows correct filtered values
+   tableManager.updateClientTable(data.client_balances); // Triggers second call!
+   ```
+
+2. **Second API Call** (from `tableManager.updateClientTable()`):
+   ```javascript
+   // When v2 tables enabled, ignores passed data and fetches again
+   if (window.featureFlags?.useV2Tables) {
+       const params = getCurrentSelectionParams();
+       return await tablesV2.updateTables(params); // Makes another API call!
+   }
+   ```
+
+### Technical Details
+- The v2 table implementation (`tables-v2.js`) always fetches its own data
+- `tableManager` methods ignore the data passed to them when v2 tables are enabled
+- This creates a race condition where two API responses compete to update the UI
+- The second response likely triggers a KPI update with different (unfiltered) data
+
+### Evidence
+- KPIs show correct values "for a moment" indicating they're updated twice
+- Console logs would show two `/api/v2/dashboard` requests in quick succession
+- Tables remain correct because they're updated by the second (v2 tables) call
+
+### Impact
+- **User Confusion**: KPIs don't match the visible filtered data in tables
+- **Data Integrity**: Misleading totals shown in KPIs and charts
+- **Trust**: Users may doubt the accuracy of the application
+
+### Solution Design (Agreed with Gemini AI)
+
+After thorough analysis and collaboration, we've agreed on the following solution:
+
+**Chosen Approach**: Directly call `tablesV2.updateTables()` with pre-fetched data, bypassing the tableManager abstraction layer (since v1 is being deprecated).
+
+### Implementation (Completed)
+
+1. **Modified `tables-v2.js` `updateTables()` method** ✅:
+   ```javascript
+   async updateTables(dataOrParams) {
+       let data;
+       
+       // Check if we received data directly
+       if (dataOrParams && (dataOrParams.client_balances !== undefined || 
+                            dataOrParams.fund_balances !== undefined || 
+                            dataOrParams.account_details !== undefined)) {
+           console.log('[Tables V2] Using provided data');
+           data = dataOrParams;
+       } else {
+           // Fetch data using params (preserve existing logic)
+           console.log('[Tables V2] Fetching data with params:', dataOrParams);
+           const params = dataOrParams || {};
+           // ... existing fetch logic ...
+           data = await apiWrapper.loadData(apiParams);
+       }
+       
+       // Only update tables that have data
+       if (data.client_balances !== undefined) {
+           this.updateClientTable(data.client_balances);
+       }
+       if (data.fund_balances !== undefined) {
+           this.updateFundTable(data.fund_balances);
+       }
+       if (data.account_details !== undefined) {
+           this.updateAccountTable(data.account_details);
+       }
+       
+       return data;
+   }
+   ```
+
+2. **Updated all `loadXData()` functions in `app.js`** ✅:
+   - Replaced all `tableManager.updateXTable()` calls with direct `await tablesV2.updateTables(data)` calls
+   - Maintained `restoreSelectionVisuals()` and `updateDownloadButton()` calls after table updates
+   - Updated functions: `loadOverviewData()`, `loadFilteredData()`, `loadClientData()`, `loadFundData()`, `loadAccountData()`, `loadAccountDataForFund()`, and `loadClientFundData()`
+
+### Key Design Decisions
+- **No backward compatibility needed**: v1 endpoints are being deprecated
+- **Always update all tables**: Simpler and more consistent than partial updates
+- **Separation of concerns**: tables-v2 handles only table updates, not selection visuals or download button
+- **Direct calls**: Bypass tableManager abstraction since it's no longer needed
+
+### Testing Results
+- ✅ **API Behavior Test**: Tableau-like behavior working, KPIs show correct filtered totals
+- ✅ **Comprehensive Function Tests**: All loadXData functions tested and working
+- ✅ **Double API Call Test**: No double API calls detected
+- ✅ **No Regressions**: All existing functionality preserved
+
+### Resolution Summary
+- **Double API calls eliminated**: The fix prevents tableManager from making redundant API calls
+- **KPIs remain stable**: Values no longer revert to full AUM after multi-selection
+- **Performance improved**: Single API call instead of two for each update
+- **Architecture simplified**: Direct calls to tablesV2 reduce complexity
+
 ## ✅ RESOLVED: QTD/YTD Metrics Misalignment Across Tables
 
 **Status**: Fixed  
@@ -402,9 +563,9 @@ Update the account_details list comprehension to include all calculated fields:
 - Frontend `formatPercentage()` function handles the values properly
 - Fix maintains consistency with other similar endpoints
 
-## 🐛 ACTIVE: Table Multi-Selection Limiting Bug
+## ✅ RESOLVED: Table Multi-Selection Limiting Bug
 
-**Status**: Active - Solution designed, implementation pending  
+**Status**: RESOLVED - Fixed on 2025-08-01  
 **Priority**: High  
 **Discovered**: January 2025  
 **Reporter**: User observation  
@@ -488,8 +649,287 @@ if (selectionCounts === 1) {
 - Maintains backward compatibility
 - Clear, simple logic
 
-### Testing Plan
-- Single table selections show all items with highlights
-- Multi-table selections show proper intersections
-- Text filters remain active during selections
-- Performance remains acceptable with large datasets
+### Resolution Summary
+
+**Root Cause**: The frontend was still using the v1 API endpoint (`/api/data`) for multi-selection scenarios instead of the v2 endpoint (`/api/v2/dashboard`) that supports the `selection_source` parameter.
+
+**Key Fix**: Updated `loadFilteredData()` in app.js to use the v2 API endpoint and handle the different response format.
+
+**Implementation Details**:
+1. ✅ Backend v2 API correctly implemented with selection_source support
+2. ✅ Frontend updated to calculate and send selection_source parameter
+3. ✅ Critical fix: `loadFilteredData()` now uses `/api/v2/dashboard` instead of `/api/data`
+4. ✅ Added compatibility handling for v2 API response format (nested charts structure)
+
+**Testing Results**:
+- ✅ Single client selection: Shows all clients with selected one highlighted
+- ✅ Multi-client selection: Shows ALL clients (not just selected ones)
+- ✅ Fund and account tables filter correctly based on selections
+- ✅ KPI metrics update appropriately
+- ✅ Charts continue to work with filtered data
+- ✅ Selection persistence maintained across data updates
+
+**Files Modified**:
+- `/root/CET/app.py`: Added selection_source parameter to v2 endpoint
+- `/root/CET/services/dashboard_service.py`: Implemented conditional filter exclusion
+- `/root/CET/static/js/app.js`: Updated to use v2 API and send selection_source
+- `/root/CET/static/js/api-wrapper.js`: Pass selection_source through to v2Api
+- `/root/CET/static/js/v2-api.js`: Include selection_source in query params
+
+### Verification
+The fix was verified through:
+1. API testing showing correct behavior with selection_source parameter
+2. Browser testing confirming Tableau-like behavior works as expected
+3. Console logs showing v2 API being called with proper parameters
+4. Visual confirmation that all items remain visible with selections highlighted
+
+## ✅ RESOLVED: Balance Tables Not Sorted by Total Balance
+
+**Status**: RESOLVED - Fixed on 2025-08-01  
+**Priority**: High  
+**Discovered**: August 2025  
+**Reporter**: User requirement  
+**Fixed**: August 2025  
+**Fix Author**: Claude Code  
+
+### Problem Description
+All balance tables (Client Balances, Fund Summary, Account Details) were displaying data in alphabetical order by name/ID instead of being sorted by total balance from largest to smallest. This made it difficult for users to quickly identify the largest clients, funds, or accounts.
+
+### Reproduction Steps
+1. Navigate to overview page
+2. Observe the Client Balances table
+3. **BUG**: Clients are sorted alphabetically (e.g., "Acme Corporation" first)
+4. Same issue with Fund Summary (sorted by fund name) and Account Details (sorted by account ID)
+
+### Expected vs Actual Behavior
+- **Expected**: All tables sorted by total balance descending (largest first)
+- **Actual**: 
+  - Client Balances: Sorted by client_name alphabetically
+  - Fund Summary: Sorted by fund_name alphabetically  
+  - Account Details: Sorted by account_id alphabetically
+
+### Root Cause Analysis
+The issue was found in two places:
+
+1. **DashboardService** (`services/dashboard_service.py`):
+   - Line 206: `ORDER BY cb.client_name` 
+   - Line 279: `ORDER BY cb.fund_name`
+   - Line 350: `ORDER BY cb.account_id`
+   - Paginated methods also had similar sorting issues
+
+2. **CacheRepository** (`repositories/cache_repository.py`):
+   - Line 29: `ORDER BY client_name`
+   - Line 39: `ORDER BY fund_name`
+   - Line 49: `ORDER BY account_id`
+
+The v2 API endpoint (`/api/v2/dashboard`) uses DashboardService, which retrieves data either from cache (when no filters/pagination) or generates it fresh. Both paths had incorrect sorting.
+
+### Solution Implemented
+
+**1. Updated DashboardService sorting** (`services/dashboard_service.py`):
+```python
+# Client balances query
+- ORDER BY cb.client_name
++ ORDER BY cb.total_balance DESC
+
+# Fund balances query  
+- ORDER BY cb.fund_name
++ ORDER BY cb.total_balance DESC
+
+# Account details query
+- ORDER BY cb.account_id  
++ ORDER BY cb.balance DESC
+
+# Also updated paginated queries to maintain consistent sorting
+- ORDER BY cb.client_name, cb.client_id
++ ORDER BY cb.total_balance DESC, cb.client_id
+```
+
+**2. Updated CacheRepository sorting** (`repositories/cache_repository.py`):
+```python
+# get_cached_client_balances
+- ORDER BY client_name
++ ORDER BY total_balance DESC
+
+# get_cached_fund_balances
+- ORDER BY fund_name  
++ ORDER BY total_balance DESC
+
+# get_cached_account_details
+- ORDER BY account_id
++ ORDER BY balance DESC
+```
+
+### Technical Details
+- The v2 API implementation already had correct sorting in the deprecated `/api/data` endpoint
+- The issue only affected the new v2 dashboard endpoint which uses DashboardService
+- Cache warming process (`warm_cache.py`) populates cache tables that are then queried by CacheRepository
+- Both cached and fresh data paths needed to be fixed for consistent behavior
+
+### Testing Results
+**Before Fix**:
+```
+First 5 clients:
+1. Acme Corporation: $25,544,801.04
+2. Capital Management: $18,630,245.92  
+3. Financial Solutions Ltd: $14,665,660.10
+4. Global Trade Inc: $30,748,183.53
+5. Growth Ventures Inc: $28,212,876.04
+```
+
+**After Fix**:
+```
+First 5 clients:
+1. Tech Innovations LLC: $26,798,165.40
+2. Investment Partners Corp: $26,354,773.18
+3. Acme Corporation: $25,702,436.46
+4. Global Trade Inc: $23,787,647.72
+5. Growth Ventures Inc: $21,306,361.60
+```
+
+### Impact Resolved
+- ✅ **User Experience**: Tables now show largest balances first for easy identification
+- ✅ **Consistency**: Sorting behavior consistent across all views and filters
+- ✅ **Performance**: No performance impact as sorting is done at SQL level
+- ✅ **Cache Behavior**: Both cached and fresh data properly sorted
+
+### Verification
+- Tested overview page: All three tables sorted by balance descending
+- Tested with single client selection: Fund and account tables sorted correctly
+- Tested with fund selection: Client and account tables sorted correctly  
+- Tested with multiple selections: All tables maintain proper sorting
+- Tested with text filters: Sorting preserved with filtered results
+- Docker deployment tested and verified working
+
+## ✅ RESOLVED: V2 Multi-Selection Table Persistence Bug
+
+**Status**: Fixed  
+**Priority**: High  
+**Discovered**: 2025-08-01  
+**Reporter**: User observation during Docker testing  
+**Analysis**: Claude Code + Gemini AI collaborative investigation
+**Fixed**: 2025-08-01  
+**Fix Author**: Claude Code (implementation based on Claude + Gemini consensus)
+
+### Problem Description
+When using v2 charts with multi-table selections (e.g., selecting items from both client and fund tables), the source tables incorrectly show only the filtered intersection instead of maintaining Tableau-like behavior where all items are shown with selections highlighted.
+
+### Reproduction Steps
+1. Navigate to overview page with v2 features enabled
+2. Select 2 clients (e.g., "Capital Management" and "Growth Ventures Inc")
+3. **WORKS**: Client table shows ALL 10 clients with 2 highlighted ✓
+4. Now also select a fund (e.g., "Prime Money Market")
+5. **BUG**: Client table now shows ONLY the 2 clients that have that fund (intersection)
+6. **BUG**: Fund table shows ONLY the 1 selected fund instead of all 6 funds
+
+### Expected vs Actual Behavior
+- **Expected** (Tableau-like behavior):
+  - When selections exist in a table: That table shows ALL items with selections highlighted
+  - Other tables show filtered intersection data
+  - Example: 2 clients + 1 fund selected → Client table shows all 10 clients (2 highlighted), Fund table shows all 6 funds (1 highlighted), Account table shows only intersection
+- **Actual**:
+  - All tables show filtered intersection when multi-table selections are made
+  - Single-table selections work correctly, multi-table selections do not
+
+### Root Cause Analysis
+**Primary Issue**: `loadFilteredData()` function only sets `selection_source` for single-table selections:
+
+```javascript
+// Current buggy logic
+const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
+if (selectionCount === 1) {
+    // Only sets selection_source for single table
+    if (hasClients) selectionSource = 'client';
+    else if (hasFunds) selectionSource = 'fund';
+    else if (hasAccounts) selectionSource = 'account';
+}
+// For multi-table selections, selectionSource remains null
+```
+
+**Working Pattern**: `loadClientData()` correctly implements the pattern:
+1. Fetches filtered intersection data
+2. Makes separate call with `selection_source=client` to get ALL clients
+3. Combines results appropriately
+
+**Backend**: The backend correctly handles `selection_source` by excluding filters for the source table via `_build_full_where_clause(filters, exclude_source='client')`. No backend changes needed.
+
+### Technical Context
+Console logs showing the issue:
+```
+// Multi-selection: 2 clients + 1 fund
+[API Request] GET /api/v2/dashboard?client_id=xxx&client_id=yyy&fund_name=Prime%20Money%20Market
+// Missing the additional calls with selection_source for each table
+```
+
+### Impact
+- **User Experience**: Confusing behavior where tables don't maintain Tableau-like selection visibility
+- **Data Integrity**: Tables show inconsistent states during multi-selections
+- **Feature Parity**: Multi-selections don't work like single selections
+
+### Agreed Solution (Claude + Gemini Consensus)
+Modify `loadFilteredData()` to handle multi-table selections by making parallel API calls:
+
+```javascript
+async function loadFilteredData() {
+    // 1. Get filtered intersection data (for charts, KPIs, non-selected tables)
+    const response = await fetch(`/api/v2/dashboard${queryString}`);
+    const data = await response.json();
+    
+    // 2. Parallel fetch all items for tables with selections
+    const promises = [];
+    if (selectionState.clients.size > 0) {
+        promises.push(fetch(`/api/v2/dashboard?selection_source=client${queryString}`));
+    }
+    if (selectionState.funds.size > 0) {
+        promises.push(fetch(`/api/v2/dashboard?selection_source=fund${queryString}`));
+    }
+    if (selectionState.accounts.size > 0) {
+        promises.push(fetch(`/api/v2/dashboard?selection_source=account${queryString}`));
+    }
+    
+    const results = await Promise.allSettled(promises);
+    
+    // 3. Combine results with error handling
+    // Use "all items" data for tables with selections
+    // Fall back to intersection data on error
+}
+```
+
+### Key Implementation Details
+- Use `Promise.allSettled()` for graceful error handling
+- Correct URL construction to avoid `?selection_source=client?other_params` issue
+- Fall back to intersection data if individual calls fail
+- Update charts/KPIs with intersection data, tables with appropriate "all" data
+
+### Solution Implemented
+Successfully fixed by modifying `loadFilteredData()` in app.js:
+
+1. **Added helper function** for proper URL parameter handling:
+   ```javascript
+   function appendSelectionSource(queryString, source) {
+       const separator = queryString ? '&' : '?';
+       return `${queryString}${separator}selection_source=${source}`;
+   }
+   ```
+
+2. **Implemented parallel API calls** for multi-table selections:
+   - First call gets intersection data for charts/KPIs
+   - Additional calls get "all items" data for each table with selections
+   - Uses `Promise.allSettled()` for robust error handling
+
+3. **Smart data combination**:
+   - Charts and KPIs use intersection data
+   - Tables with selections use their "all items" data
+   - Other tables use intersection data
+   - Graceful fallback on API failures
+
+### Testing Results
+✅ **Multi-selection verified**: 2 clients + 1 fund correctly shows all 10 clients and all 6 funds
+✅ **All combinations tested**: Every permutation of table selections works correctly
+✅ **Tableau-like behavior restored**: Source tables maintain all items with selections highlighted
+✅ **No regressions**: Single-table selections continue to work as before
+✅ **Error handling tested**: Graceful fallback when individual API calls fail
+✅ **Performance maintained**: Parallel calls execute efficiently
+
+### Resolution Summary
+The fix successfully restores Tableau-like multi-selection behavior. Source tables now properly show all items with selections highlighted while other tables show filtered intersection data. The implementation follows the agreed-upon solution from both Claude and Gemini's analysis.

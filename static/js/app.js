@@ -53,9 +53,15 @@ const chartManager = {
     // Update charts based on feature flag
     update: function(data) {
         if (window.featureFlags?.useV2Charts) {
-            // V2 charts fetch their own data
+            // V2 charts should use the data directly if available
             console.log('[Chart Manager] Using v2 charts');
-            chartsV2.updateCharts(getCurrentSelectionParams());
+            if (data && (data.recent_history || data.long_term_history)) {
+                // Data already has chart data, update directly
+                chartsV2.updateChartData(data);
+            } else {
+                // No chart data provided, let v2 fetch its own
+                chartsV2.updateCharts(getCurrentSelectionParams());
+            }
         } else {
             // V1 charts use passed data
             console.log('[Chart Manager] Using v1 charts');
@@ -406,14 +412,14 @@ function updateKPICards(data) {
     document.getElementById('totalClients').textContent = countValue;
     
     document.getElementById('totalFunds').textContent = totalFunds;
-    document.getElementById('avgGrowth').textContent = avgYtdGrowth.toFixed(1) + '%';
+    document.getElementById('avgGrowth').textContent = (avgYtdGrowth !== undefined && avgYtdGrowth !== null && !isNaN(avgYtdGrowth)) ? avgYtdGrowth.toFixed(1) + '%' : '0.0%';
     
     // Update AUM change indicator
     const aumChangeEl = document.getElementById('aumChange');
     if (aumChange !== null) {
         const changeClass = aumChange > 0 ? 'positive' : aumChange < 0 ? 'negative' : 'neutral';
         const prefix = aumChange > 0 ? '+' : '';
-        aumChangeEl.textContent = `${prefix}${aumChange.toFixed(1)}% last 30 days`;
+        aumChangeEl.textContent = `${prefix}${(aumChange !== undefined && aumChange !== null && !isNaN(aumChange)) ? aumChange.toFixed(1) : '0.0'}% last 30 days`;
         aumChangeEl.className = `kpi-change ${changeClass}`;
     } else {
         aumChangeEl.textContent = '-';
@@ -717,17 +723,47 @@ function initializeCharts() {
 // Load overview data
 async function loadOverviewData() {
     try {
-        const response = await fetch('/api/overview' + buildQueryString());
-        const data = await response.json();
+        let data;
+        
+        // Check if v2 API should be used
+        if (window.featureFlags?.useV2DashboardApi) {
+            // Use v2 API for consistency with multi-selection
+            const queryString = buildQueryString();
+            const response = await fetch(`/api/v2/dashboard${queryString}`);
+            data = await response.json();
+            
+            if (!response.ok) {
+                console.error('Error loading overview data from v2:', data.error);
+                // Fallback to v1
+                const v1Response = await fetch('/api/overview' + buildQueryString());
+                data = await v1Response.json();
+            }
+        } else {
+            // Use v1 API
+            const response = await fetch('/api/overview' + buildQueryString());
+            data = await response.json();
+        }
+        
         allData = data;
         
         currentFilter = { type: 'overview', value: null };
         updateFilterIndicator('All Clients - All Funds');
         updateKPICards(data);
-        chartManager.update(data);
-        tableManager.updateClientTable(data.client_balances);
-        tableManager.updateFundTable(data.fund_balances);
-        tableManager.updateAccountTable(data.account_details);
+        
+        // Handle chart updates based on API version
+        if (data.charts) {
+            // v2 API format - extract chart data
+            chartManager.update({
+                recent_history: data.charts.recent_history,
+                long_term_history: data.charts.long_term_history
+            });
+        } else {
+            // v1 API format
+            chartManager.update(data);
+        }
+        
+        // Update all tables with v2 (eliminates double API call)
+        await tablesV2.updateTables(data);
         
         // Update CSV row count
         updateDownloadButton();
@@ -818,14 +854,10 @@ async function loadDateData(dateString) {
         
         // For tables, show full data if no selections, filtered data if selections exist
         if (hasClientSelection || hasFundSelection || hasAccountSelection) {
-            tableManager.updateClientTable(data.client_balances);
-            tableManager.updateFundTable(data.fund_balances);
-            tableManager.updateAccountTable(data.account_details);
+            await tablesV2.updateTables(data);
         } else {
             // Show all data for the date
-            tableManager.updateClientTable(fullDateData.client_balances);
-            tableManager.updateFundTable(fullDateData.fund_balances);
-            tableManager.updateAccountTable(fullDateData.account_details);
+            await tablesV2.updateTables(fullDateData);
         }
         
         // Update CSV row count
@@ -838,26 +870,73 @@ async function loadDateData(dateString) {
 // Load client-specific data
 async function loadClientData(clientId, clientName) {
     try {
-        const response = await fetch(`/api/client/${clientId}` + buildQueryString());
-        const data = await response.json();
+        let data;
         
-        currentFilter = { type: 'client', value: clientId, name: clientName };
-        chartManager.update(data);
-        
-        // Update tables with filtered data
-        // Keep full client list but highlight selected
-        if (allData && allData.client_balances) {
-            tableManager.updateClientTable(allData.client_balances);
+        // Check if v2 API should be used
+        if (window.featureFlags?.useV2DashboardApi) {
+            // Use v2 API with client filter
+            const queryString = buildQueryString();
+            const clientParam = queryString ? `${queryString}&client_id=${clientId}` : `?client_id=${clientId}`;
+            const response = await fetch(`/api/v2/dashboard${clientParam}`);
+            data = await response.json();
+            
+            if (!response.ok) {
+                console.error('Error loading client data from v2:', data.error);
+                // Fallback to v1
+                const v1Response = await fetch(`/api/client/${clientId}` + buildQueryString());
+                data = await v1Response.json();
+            }
+        } else {
+            // Use v1 API
+            const response = await fetch(`/api/client/${clientId}` + buildQueryString());
+            data = await response.json();
         }
         
-        // Show funds for selected client
-        tableManager.updateFundTable(data.fund_balances);
+        currentFilter = { type: 'client', value: clientId, name: clientName };
         
-        // Show accounts for selected client
-        tableManager.updateAccountTable(data.account_details.map(acc => ({ ...acc, client_name: clientName })));
+        // Handle chart updates based on API version
+        if (data.charts) {
+            // v2 API format - extract chart data
+            chartManager.update({
+                recent_history: data.charts.recent_history,
+                long_term_history: data.charts.long_term_history
+            });
+        } else {
+            // v1 API format
+            chartManager.update(data);
+        }
+        
+        // For Tableau-like behavior, we need to show ALL clients but with filtered funds/accounts
+        // When using v2 API, we need to fetch all clients separately
+        let allClientsData = null;
+        if (window.featureFlags?.useV2DashboardApi) {
+            // Fetch all clients to show in the table
+            const allClientsResponse = await fetch(`/api/v2/dashboard?selection_source=client`);
+            if (allClientsResponse.ok) {
+                allClientsData = await allClientsResponse.json();
+            }
+        }
+        
+        // Update tables with proper data
+        const tableData = {
+            // Use all clients if available, otherwise fall back to filtered data
+            client_balances: allClientsData?.client_balances || data.client_balances || allData?.client_balances || [],
+            fund_balances: data.fund_balances || data.funds || [],
+            account_details: data.account_details || data.accounts || []
+        };
+        
+        // Add client name to accounts if missing
+        if (tableData.account_details && tableData.account_details.length > 0) {
+            tableData.account_details = tableData.account_details.map(acc => ({ ...acc, client_name: acc.client_name || clientName }));
+        }
+        
+        await tablesV2.updateTables(tableData);
         
         // Update KPIs with client data
         updateKPICards(data);
+        
+        // Restore visual selections
+        restoreSelectionVisuals();
         
     } catch (error) {
         console.error('Error loading client data:', error);
@@ -873,22 +952,22 @@ async function loadFundData(fundName) {
         currentFilter = { type: 'fund', value: fundName };
         chartManager.update(data);
         
-        // Show clients that have this fund
-        tableManager.updateClientTable(data.client_balances);
-        
-        // Keep full fund list but highlight selected
-        if (allData && allData.fund_balances) {
-            tableManager.updateFundTable(allData.fund_balances);
-        }
-        
-        // Show accounts with this fund
-        tableManager.updateAccountTable(data.account_details.map(acc => ({ ...acc, fund_name: fundName })));
+        // Update tables with fund-specific data
+        const tableData = {
+            client_balances: data.client_balances,
+            fund_balances: allData?.fund_balances || data.fund_balances,
+            account_details: data.account_details.map(acc => ({ ...acc, fund_name: fundName }))
+        };
+        await tablesV2.updateTables(tableData);
         
         // Update KPIs with fund data
         updateKPICards(data);
         
         // Update CSV row count
         updateDownloadButton();
+        
+        // Restore visual selections
+        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading fund data:', error);
     }
@@ -920,28 +999,30 @@ async function loadAccountData(accountId) {
         }
         
         // Show the client that owns this account with account-specific total
+        let clientData = [];
         if (clientId) {
             const client = allData.client_balances.find(c => c.client_id === clientId);
             if (client) {
                 // Calculate total balance for this account across all funds
                 const accountTotal = data.fund_allocation.reduce((sum, fund) => sum + fund.balance, 0);
-                tableManager.updateClientTable([{
+                clientData = [{
                     ...client,
                     total_balance: accountTotal
-                }]);
+                }];
             }
         }
         
-        // Show funds in this account
-        tableManager.updateFundTable(data.fund_allocation.map(f => ({ 
+        // Prepare table data
+        const fundData = data.fund_allocation.map(f => ({ 
             ...f, 
             total_balance: f.balance, 
             account_count: 1,
             qtd_change: null,
             ytd_change: null
-        })));
+        }));
         
-        // Show accounts based on current selection context
+        // Determine which accounts to show based on current selection context
+        let accountData = [];
         if (selectionState.clients.size > 0 && selectionState.funds.size > 0) {
             // If client and fund are selected, show only accounts for that combination
             const selectedClientId = Array.from(selectionState.clients)[0];
@@ -950,31 +1031,40 @@ async function loadAccountData(accountId) {
             // Fetch the filtered account list
             const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const filteredData = await filteredResponse.json();
-            tableManager.updateAccountTable(filteredData.account_details);
+            accountData = filteredData.account_details;
         } else if (selectionState.clients.size > 0) {
             // If only client is selected, show accounts for that client
             const selectedClientId = Array.from(selectionState.clients)[0];
             const clientResponse = await fetch(`/api/client/${selectedClientId}` + buildQueryString());
             const clientData = await clientResponse.json();
-            tableManager.updateAccountTable(clientData.account_details);
+            accountData = clientData.account_details;
         } else if (selectionState.funds.size > 0) {
             // If only fund is selected, show accounts for that fund
             const selectedFundName = Array.from(selectionState.funds)[0];
             const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
-            const fundData = await fundResponse.json();
-            tableManager.updateAccountTable(fundData.account_details);
+            const fundResponseData = await fundResponse.json();
+            accountData = fundResponseData.account_details;
         } else {
             // No other selections, show all accounts
-            if (allData && allData.account_details) {
-                tableManager.updateAccountTable(allData.account_details);
-            }
+            accountData = allData?.account_details || [];
         }
+        
+        // Update all tables with the prepared data
+        const tableData = {
+            client_balances: clientData,
+            fund_balances: fundData,
+            account_details: accountData
+        };
+        await tablesV2.updateTables(tableData);
         
         // Update KPIs with account data
         updateKPICards(data);
         
         // Update CSV row count
         updateDownloadButton();
+        
+        // Restore visual selections
+        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading account data:', error);
     }
@@ -1006,27 +1096,29 @@ async function loadAccountDataForFund(accountId, fundName) {
         }
         
         // Show the client that owns this account with filtered balance
+        let clientData = [];
         if (clientId) {
             const client = allData.client_balances.find(c => c.client_id === clientId);
             if (client) {
                 // Show client with only the account-fund specific balance
-                tableManager.updateClientTable([{
+                clientData = [{
                     ...client,
                     total_balance: data.fund_allocation[0]?.balance || 0
-                }]);
+                }];
             }
         }
         
         // Show only the selected fund for this account
-        tableManager.updateFundTable([{ 
+        const fundData = [{ 
             fund_name: fundName,
             total_balance: data.fund_allocation[0]?.balance || 0,
             account_count: 1,
             qtd_change: null,
             ytd_change: null
-        }]);
+        }];
         
-        // Show accounts based on current selection context
+        // Determine which accounts to show based on current selection context
+        let accountData = [];
         if (selectionState.clients.size > 0 && selectionState.funds.size > 0) {
             // If client and fund are selected, show only accounts for that combination
             const selectedClientId = Array.from(selectionState.clients)[0];
@@ -1035,22 +1127,31 @@ async function loadAccountDataForFund(accountId, fundName) {
             // Fetch the filtered account list
             const filteredResponse = await fetch(`/api/client/${selectedClientId}/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
             const filteredData = await filteredResponse.json();
-            tableManager.updateAccountTable(filteredData.account_details);
+            accountData = filteredData.account_details;
         } else if (selectionState.funds.size > 0) {
             // If only fund is selected, show accounts for that fund
             const selectedFundName = Array.from(selectionState.funds)[0];
             const fundResponse = await fetch(`/api/fund/${encodeURIComponent(selectedFundName)}` + buildQueryString());
-            const fundData = await fundResponse.json();
-            tableManager.updateAccountTable(fundData.account_details);
+            const fundResponseData = await fundResponse.json();
+            accountData = fundResponseData.account_details;
         } else {
             // No other selections, show all accounts
-            if (allData && allData.account_details) {
-                tableManager.updateAccountTable(allData.account_details);
-            }
+            accountData = allData?.account_details || [];
         }
+        
+        // Update all tables with the prepared data
+        const tableData = {
+            client_balances: clientData,
+            fund_balances: fundData,
+            account_details: accountData
+        };
+        await tablesV2.updateTables(tableData);
         
         // Update KPIs with account data
         updateKPICards(data);
+        
+        // Restore visual selections
+        restoreSelectionVisuals();
         
         // Update CSV row count
         updateDownloadButton();
@@ -1710,29 +1811,22 @@ async function updateDataBasedOnSelections() {
     restoreSelectionVisuals();
 }
 
+// Helper function to append selection_source parameter correctly
+function appendSelectionSource(queryString, source) {
+    const separator = queryString ? '&' : '?';
+    return `${queryString}${separator}selection_source=${source}`;
+}
+
 // Load filtered data based on multiple selections
 async function loadFilteredData() {
     try {
-        // Determine selection source (only for single-table selections)
-        let selectionSource = null;
         const hasClients = selectionState.clients.size > 0;
         const hasFunds = selectionState.funds.size > 0;
         const hasAccounts = selectionState.accounts.size > 0;
         
-        const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
-        
-        if (selectionCount === 1) {
-            if (hasClients) selectionSource = 'client';
-            else if (hasFunds) selectionSource = 'fund';
-            else if (hasAccounts) selectionSource = 'account';
-        }
-        
-        // Use the v2 API endpoint for proper Tableau-like behavior
+        // Get filtered intersection data for charts, KPIs, and non-selected tables
         const queryString = buildQueryString(true);
-        const selectionParam = selectionSource ? `&selection_source=${selectionSource}` : '';
-        const url = `/api/v2/dashboard${queryString}${selectionParam}`;
-        
-        const response = await fetch(url);
+        const response = await fetch(`/api/v2/dashboard${queryString}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -1740,10 +1834,59 @@ async function loadFilteredData() {
             return;
         }
         
+        // Prepare promises for parallel fetching of "all items" data
+        const promises = [];
+        const sources = [];
+        
+        if (hasClients) {
+            const url = `/api/v2/dashboard${appendSelectionSource(queryString, 'client')}`;
+            promises.push(fetch(url).then(r => r.json()));
+            sources.push('client');
+        }
+        if (hasFunds) {
+            const url = `/api/v2/dashboard${appendSelectionSource(queryString, 'fund')}`;
+            promises.push(fetch(url).then(r => r.json()));
+            sources.push('fund');
+        }
+        if (hasAccounts) {
+            const url = `/api/v2/dashboard${appendSelectionSource(queryString, 'account')}`;
+            promises.push(fetch(url).then(r => r.json()));
+            sources.push('account');
+        }
+        
+        // Execute all promises and handle failures gracefully
+        let allClientsData = null;
+        let allFundsData = null;
+        let allAccountsData = null;
+        
+        if (promises.length > 0) {
+            const results = await Promise.allSettled(promises);
+            
+            results.forEach((result, index) => {
+                const source = sources[index];
+                if (result.status === 'fulfilled') {
+                    switch (source) {
+                        case 'client':
+                            allClientsData = result.value;
+                            break;
+                        case 'fund':
+                            allFundsData = result.value;
+                            break;
+                        case 'account':
+                            allAccountsData = result.value;
+                            break;
+                    }
+                } else {
+                    console.error(`Failed to fetch all ${source} data:`, result.reason);
+                    // Fallback handled by null checks below
+                }
+            });
+        }
+        
         // Update filter type for indicator
         currentFilter = { type: 'multi', filters: data.metadata ? data.metadata.filters_applied : data.filters };
         
-        // Update all UI components - handle both v1 and v2 API formats
+        // Update charts and KPIs with intersection data
         if (data.charts) {
             // v2 API format
             chartManager.update({
@@ -1754,10 +1897,17 @@ async function loadFilteredData() {
             // v1 API format
             chartManager.update(data);
         }
-        tableManager.updateClientTable(data.client_balances);
-        tableManager.updateFundTable(data.fund_balances);
-        tableManager.updateAccountTable(data.account_details);
         updateKPICards(data);
+        
+        // Combine data for tables with fallback to intersection data
+        const tableData = {
+            client_balances: hasClients && allClientsData ? allClientsData.client_balances : data.client_balances,
+            fund_balances: hasFunds && allFundsData ? allFundsData.fund_balances : data.fund_balances,
+            account_details: hasAccounts && allAccountsData ? allAccountsData.account_details : data.account_details
+        };
+        
+        // Update all tables with combined data
+        await tablesV2.updateTables(tableData);
         
         // Update CSV row count
         updateDownloadButton();
@@ -1782,24 +1932,15 @@ async function loadClientFundData(clientId, clientName, fundName) {
         
         chartManager.update(data);
         
-        // Update tables with filtered data
-        // Backend now returns arrays instead of single objects
-        if (data.client_balances && data.client_balances.length > 0) {
-            tableManager.updateClientTable(data.client_balances);
-        }
-        
-        // Update fund table with the single fund
-        if (data.fund_balances && data.fund_balances.length > 0) {
-            tableManager.updateFundTable(data.fund_balances);
-        }
-        
-        // Note: Fund table already updated above with the specific fund from client-fund endpoint
-        
-        tableManager.updateAccountTable(data.account_details);
+        // Update all tables with the combined data
+        await tablesV2.updateTables(data);
         updateKPICards(data);
         
         // Update CSV row count
         updateDownloadButton();
+        
+        // Restore visual selections
+        restoreSelectionVisuals();
     } catch (error) {
         console.error('Error loading client-fund data:', error);
     }

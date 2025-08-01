@@ -203,7 +203,7 @@ class DashboardService:
         FROM current_balances cb
         LEFT JOIN qtd_start_balances qsb ON cb.client_id = qsb.client_id
         LEFT JOIN ytd_start_balances ysb ON cb.client_id = ysb.client_id
-        ORDER BY cb.client_name
+        ORDER BY cb.total_balance DESC
         """
         
         return self._base_repo.execute_query(sql, params)
@@ -276,7 +276,7 @@ class DashboardService:
         FROM current_balances cb
         LEFT JOIN qtd_start_balances qsb ON cb.fund_name = qsb.fund_name
         LEFT JOIN ytd_start_balances ysb ON cb.fund_name = ysb.fund_name
-        ORDER BY cb.fund_name
+        ORDER BY cb.total_balance DESC
         """
         
         return self._base_repo.execute_query(sql, params)
@@ -347,7 +347,7 @@ class DashboardService:
         FROM current_balances cb
         LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
         LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
-        ORDER BY cb.account_id
+        ORDER BY cb.balance DESC
         """
         
         return self._base_repo.execute_query(sql, params)
@@ -593,7 +593,7 @@ class DashboardService:
         LEFT JOIN qtd_start_balances qsb ON cb.client_id = qsb.client_id
         LEFT JOIN ytd_start_balances ysb ON cb.client_id = ysb.client_id
         WHERE 1=1 {cursor_condition}
-        ORDER BY cb.client_name, cb.client_id
+        ORDER BY cb.total_balance DESC, cb.client_id
         LIMIT :page_size
         """
         
@@ -699,7 +699,7 @@ class DashboardService:
         LEFT JOIN qtd_start_balances qsb ON cb.fund_name = qsb.fund_name
         LEFT JOIN ytd_start_balances ysb ON cb.fund_name = ysb.fund_name
         WHERE 1=1 {cursor_condition}
-        ORDER BY cb.fund_name
+        ORDER BY cb.total_balance DESC, cb.fund_name
         LIMIT :page_size
         """
         
@@ -802,7 +802,7 @@ class DashboardService:
         LEFT JOIN qtd_start_balances qsb ON cb.account_id = qsb.account_id
         LEFT JOIN ytd_start_balances ysb ON cb.account_id = ysb.account_id
         WHERE 1=1 {cursor_condition}
-        ORDER BY cb.account_id
+        ORDER BY cb.balance DESC, cb.account_id
         LIMIT :page_size
         """
         

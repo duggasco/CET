@@ -26,7 +26,7 @@ class CacheRepository(BaseRepository):
         SELECT client_id, client_name, total_balance, qtd_change, ytd_change
         FROM cached_client_balances
         WHERE as_of_date = :as_of_date
-        ORDER BY client_name
+        ORDER BY total_balance DESC
         """
         return self.execute_query(sql, {"as_of_date": as_of_date})
     
@@ -36,7 +36,7 @@ class CacheRepository(BaseRepository):
         SELECT fund_name, fund_ticker, total_balance, qtd_change, ytd_change
         FROM cached_fund_balances
         WHERE as_of_date = :as_of_date
-        ORDER BY fund_name
+        ORDER BY total_balance DESC
         """
         return self.execute_query(sql, {"as_of_date": as_of_date})
     
@@ -46,7 +46,7 @@ class CacheRepository(BaseRepository):
         SELECT account_id, client_id, client_name, balance, qtd_change, ytd_change
         FROM cached_account_details
         WHERE as_of_date = :as_of_date
-        ORDER BY account_id
+        ORDER BY balance DESC
         """
         return self.execute_query(sql, {"as_of_date": as_of_date})
     

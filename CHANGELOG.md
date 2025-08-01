@@ -1,5 +1,271 @@
 # Changelog
 
+## [Latest] - V2 Charts Trend Lines Restored (2025-08-01)
+
+### 🎨 Feature Restoration
+- **Added min/max/average trend lines to v2 charts**: Restored the dashed trend lines from v1 implementation
+- **Visual design matches v1**: Thin dashed lines for average (gray), maximum (blue), and minimum (red)
+- **Smart tooltip filtering**: Tooltips only show main balance line, not trend lines
+
+### 🔧 Technical Implementation
+- **static/js/charts-v2.js Updates**:
+  - Added three additional datasets to chart data for avg/max/min trend lines
+  - Trend lines use `borderDash: [5, 5]` for dashed appearance
+  - Very thin borders (0.5px) with no hover interaction (`pointRadius: 0`)
+  - Colors: Gray (rgba(107,114,128,0.95)), Blue (rgba(59,130,246,0.95)), Red (rgba(239,68,68,0.95))
+  - Order property ensures trend lines render behind main data
+  - Updated tooltip filter to exclude trend line datasets
+  - Fixed clearCharts() method to handle multiple datasets
+
+### ✅ Result
+- Both 90-day and 3-year charts now display horizontal dashed trend lines
+- Statistics continue to show in chart headers (Max/Avg/Min values)
+- Charts maintain all existing functionality (click to filter by date, etc.)
+- Visual parity with v1 implementation achieved
+
+## [Previous] - V2 Multi-Selection Table Persistence Bug Fixed (2025-08-01)
+
+### 🐛 Critical Bug Fix
+- **Fixed v2 multi-selection breaking Tableau-like behavior**: Tables now correctly show all items with selections highlighted
+- **Root cause**: `loadFilteredData()` only set `selection_source` for single-table selections, causing all tables to show filtered data
+- **Solution**: Implemented parallel API calls for multi-table selections to maintain proper source table behavior
+
+### 🔧 Technical Implementation
+- **static/js/app.js Updates**:
+  - Added `appendSelectionSource()` helper function for proper URL parameter construction
+  - Modified `loadFilteredData()` to make parallel API calls when multiple tables have selections
+  - First call gets intersection data for charts/KPIs
+  - Additional calls get "all items" data for each table with selections using `selection_source`
+  - Uses `Promise.allSettled()` for robust error handling
+  - Smart data combination: Tables with selections use their "all items" data, others use intersection
+
+### ✅ Testing Results
+- Multi-selection (2 clients + 1 fund) correctly shows all 10 clients and all 6 funds
+- All permutations of table selections tested and working
+- Tableau-like behavior fully restored
+- No regressions in single-table selections
+- Error handling verified with graceful fallback
+- Performance maintained with parallel execution
+
+### 📊 Example
+- Select: Capital Management + Growth Ventures (clients) + Prime Money Market (fund)
+- Result: Client table shows ALL 10 clients (2 highlighted), Fund table shows ALL 6 funds (1 highlighted)
+- Account table shows only intersection (5 accounts)
+- Total AUM shows $21.8M (intersection amount)
+
+## [Previous] - V2 Charts Updated to Match V1 Functionality (2025-08-01)
+
+### 🎨 Enhancement
+- **V2 charts now have identical functionality to V1 charts**: All visual features, statistics, and interactions match exactly
+- **Added chart statistics display**: Max/Avg/Min values now shown above both 90-day and 3-year charts
+- **Fixed data field compatibility**: Charts handle both v1 (`total_balance`) and v2 (`balance`) response formats
+- **Matched exact v1 styling**: Border width (2.5px), point hover effects, grid appearance, and animations
+
+### 🔧 Technical Changes
+- **static/js/charts-v2.js Updates**:
+  - Added statistics calculation and display using `#recentChartStats` and `#longTermChartStats` elements
+  - Updated `updateChart()` to support both data field formats (total_balance/balance, balance_date/date)
+  - Applied v1 chart styling: borderWidth 2.5, pointRadius 0, hover effects with white border
+  - Uses v1 date formatters (`formatDate()` and `formatDateLong()`) for consistent display
+  - Improved chart click handling by storing original data for accurate date extraction
+  - Added animation settings: 750ms duration with easeInOutQuart easing
+  - Hide legend and configure grid to match v1 appearance
+
+### ✅ Testing Results
+- Chart statistics update correctly with all filter types
+- Visual appearance identical between v1 and v2
+- Chart click functionality works for date filtering
+- Multi-selection updates charts with correct aggregated data
+- Both API response formats handled seamlessly
+
+### 📊 Example
+- 90-day chart shows: "Max: $106.3M | Avg: $104.2M | Min: $102.1M"
+- Charts display with same blue (#0085ff) and green (#00d647) color scheme
+- Hover shows formatted balance tooltips
+- Click functionality filters tables to selected date
+
+## [Previous] - Balance Tables Sorted by Total Balance (2025-08-01)
+
+### 🐛 Bug Fix
+- **Fixed balance tables sorting alphabetically instead of by balance**: All tables now display data from largest to smallest total balance
+- **Root cause**: Both DashboardService and CacheRepository were using alphabetical sorting (ORDER BY name/id)
+- **Solution**: Updated all SQL queries to use ORDER BY total_balance DESC (or balance DESC for accounts)
+
+### 🔧 Technical Changes
+- **services/dashboard_service.py Updates**:
+  - Changed client queries from `ORDER BY cb.client_name` to `ORDER BY cb.total_balance DESC`
+  - Changed fund queries from `ORDER BY cb.fund_name` to `ORDER BY cb.total_balance DESC`
+  - Changed account queries from `ORDER BY cb.account_id` to `ORDER BY cb.balance DESC`
+  - Updated both regular and paginated query methods
+  - Maintained secondary sort key for paginated queries (e.g., ORDER BY cb.total_balance DESC, cb.client_id)
+
+- **repositories/cache_repository.py Updates**:
+  - Updated `get_cached_client_balances()` to sort by total_balance DESC
+  - Updated `get_cached_fund_balances()` to sort by total_balance DESC
+  - Updated `get_cached_account_details()` to sort by balance DESC
+  - Ensures cached data maintains same sort order as fresh queries
+
+### ✅ Testing Results
+- Overview page shows largest clients/funds/accounts first
+- Sorting maintained across all filter combinations
+- Multi-selection preserves sort order
+- Text filters show filtered results sorted by balance
+- Both cached and fresh data properly sorted
+- Docker deployment verified with correct sorting
+
+### 📊 Example
+Before: Acme Corporation (alphabetically first) shown at top with $25.5M
+After: Tech Innovations LLC (largest balance) shown at top with $26.8M
+
+## [Previous] - Multi-Selection Tableau-like Behavior Restored (2025-08-01)
+
+### 🐛 Bug Fix
+- **Fixed multi-selection behavior broken by v2 API changes**: When selecting a single client, all clients now remain visible with the selected one highlighted
+- **Root cause**: `loadClientData()` was using filtered data from v2 API which only returned the selected client
+- **Solution**: Added additional API call to fetch all clients when using v2 API for single selection
+
+### 🔧 Technical Changes
+- **app.js loadClientData() Enhancement**:
+  - Added call to `/api/v2/dashboard?selection_source=client` to get all clients
+  - Preserves Tableau-like behavior where source table shows all items with selections highlighted
+  - Maintains filtered data for funds and accounts tables
+  - Only makes additional call when v2 API is enabled
+
+### ✅ Testing Results
+- Single client selection shows all 10 clients with selected one highlighted
+- Fund and account tables properly show filtered data for selected client
+- Multi-selection behavior works correctly
+- Performance remains good with minimal overhead from additional API call
+
+## [Previous] - Charts Fixed for All Selection States (2025-08-01)
+
+### 🐛 Bug Fix
+- **Fixed charts showing blank in overview and single-client states**: Charts now display properly in all selection states, not just multi-client
+- **Root cause**: `loadOverviewData()` and `loadClientData()` were using v1 API endpoints directly instead of checking for v2 flag
+- **Solution**: Updated both functions to use v2 API when `useV2DashboardApi` flag is set
+
+### 🔧 Technical Changes
+- **app.js Updates**:
+  - Modified `loadOverviewData()` to check for v2 flag and use `/api/v2/dashboard` when enabled
+  - Modified `loadClientData()` to check for v2 flag and use v2 API with client filter
+  - Both functions now properly extract chart data from `data.charts` structure when using v2
+  - Added fallback to v1 API if v2 request fails
+  - Consistent chart data handling across all selection states
+
+### ✅ Testing Results
+- Charts display correctly in overview (all clients/funds)
+- Charts display correctly for single client selection
+- Charts display correctly for multi-client selection
+- All chart interactions (click to filter by date) working properly
+
+## [Previous] - Docker v2 Deployment Issues Fixed (2025-08-01)
+
+### 🐛 Bug Fixes
+- **Fixed "Invalid Date" in charts**: Charts now properly display dates when v2 features are enabled in Docker
+- **Fixed KPI reversion on multi-selection**: KPIs now correctly show filtered totals instead of reverting to full AUM
+- **Fixed TypeError in KPI calculations**: Added safety checks for undefined values in `.toFixed()` calls
+
+### 🔧 Technical Changes
+- **run.sh Enhancement**:
+  - Added missing `useV2DashboardApi` flag to Docker environment
+  - Full flag set: `{"useV2Tables":true,"useV2Charts":true,"useV2DashboardApi":true}`
+  - Ensures all v2 features work properly in Docker deployments
+
+- **app.js Safety Improvements**:
+  - Added null/undefined/NaN checks before `.toFixed()` calls (lines 415, 422)
+  - Prevents TypeError when KPI data is missing or malformed
+  - Defaults to '0.0' for invalid values
+
+- **v2-api.js Chart Data Fix**:
+  - Already fixed `transformToV1Format` to extract chart data from `v2Data.charts`
+  - Ensures chart data is properly passed to chart components
+
+### ✅ Testing Results
+- Docker deployment now works correctly with all v2 features enabled
+- Charts display proper date labels instead of "Invalid Date"
+- KPIs show correct filtered values for multi-selections
+- No console errors when selecting multiple clients
+- Performance maintained with v2 API optimizations
+
+## [Latest] - Docker Deployment Updated with V2 Tables Enabled (2025-08-01)
+
+### 🚀 Deployment Update
+- **Modified run.sh**: Added FEATURE_FLAGS environment variable to enable v2 tables and charts by default in Docker deployments
+- **Rationale**: The KPI/Chart reversion bug fix is implemented in v2 tables, but Docker was running with v1 by default
+- **Change**: Added `-e 'FEATURE_FLAGS={"useV2Tables":true,"useV2Charts":true}'` to docker run command
+- **Impact**: All Docker deployments now benefit from the double API call fix and improved performance
+
+## KPI/Chart Reversion Bug Fix: Double API Calls Eliminated (2025-08-01)
+
+### 🐛 Bug Fix
+- **Fixed critical issue**: KPIs and charts no longer revert to full AUM after showing correct filtered values
+- **Root cause**: Double API calls occurring when v2 tables enabled - tableManager making redundant API calls
+- **Solution**: Modified tables-v2.js to accept pre-fetched data and bypass tableManager abstraction
+
+### 🔧 Technical Changes
+- **tables-v2.js Enhancement**:
+  - Modified `updateTables()` to accept either data object or params
+  - Checks for data properties (client_balances, fund_balances, account_details)
+  - Uses provided data directly without making API calls
+  - Maintains backward compatibility with param-based calls
+  - Only updates tables that have data (prevents clearing with undefined)
+
+- **app.js Refactoring**:
+  - Replaced all `tableManager.updateXTable()` calls with direct `await tablesV2.updateTables(data)`
+  - Updated functions: loadOverviewData, loadFilteredData, loadClientData, loadFundData, loadAccountData, loadAccountDataForFund, loadClientFundData
+  - Maintained restoreSelectionVisuals() and updateDownloadButton() calls
+  - Eliminated dependency on tableManager for v2 tables (since v1 is deprecated)
+
+### ✅ Testing Results
+- API Behavior Test: Shows correct filtered KPI values without reversion
+- Comprehensive Function Tests: All loadXData functions working correctly
+- Double API Call Test: No double calls detected - single API request per action
+- Performance: Improved due to elimination of redundant API calls
+- No regressions: All existing functionality preserved
+
+### 📚 Key Design Decisions
+- Direct calls to tablesV2 since v1 endpoints are deprecated
+- No backward compatibility needed as v1 is being phased out
+- Always update all tables for consistency
+- Separation of concerns: tables-v2 handles only table updates
+
+### 📝 Documentation
+- Updated BUGS.md: Marked "KPI/Chart Values Revert to Full AUM" as RESOLVED
+- Updated TODO.md: All Priority 0 implementation tasks marked complete
+- Created test scripts: test_double_api_call.py, test_all_functions.py, test_api_behavior.py
+
+## [Previous] - Multi-Selection Bug Fix: Tableau-like Behavior Restored (2025-08-01)
+
+### 🐛 Bug Fix
+- **Fixed critical regression**: Tables now show ALL items when 2+ items are selected, with selected items highlighted
+- **Root cause**: Frontend was using v1 API endpoint (`/api/data`) instead of v2 (`/api/v2/dashboard`) for multi-selections
+- **Solution**: Updated `loadFilteredData()` to use v2 API which supports the `selection_source` parameter
+
+### 🔧 Technical Changes
+- **Backend (v2 API)**:
+  - Added `selection_source` parameter to `/api/v2/dashboard` endpoint
+  - Updated `DashboardService` to conditionally exclude filters based on selection source
+  - Modified `_build_full_where_clause()` to accept `exclude_source` parameter
+  - All table methods now respect selection source for Tableau-like behavior
+
+- **Frontend**:
+  - Updated `loadFilteredData()` to use v2 API endpoint instead of v1
+  - Added compatibility handling for v2 API response format (nested charts structure)
+  - Calculate `selectionSource` when only one table has selections
+  - Pass `selection_source` through entire API call chain (app.js → apiWrapper → v2Api)
+
+### ✅ Testing Results
+- Single client selection: Shows all 10 clients with selected one highlighted
+- Multi-client selection: Shows all 10 clients (not just the 2 selected)
+- Cross-table filtering: Other tables filter correctly based on selections
+- KPI metrics: Update appropriately based on filtered context
+- Performance: No regression, responses remain <200ms
+
+### 📝 Documentation
+- Updated BUGS.md: Marked "Table Multi-Selection Limiting Bug" as RESOLVED
+- Updated PLAN.md: Phase 2.5 marked as COMPLETED
+- Updated TODO.md: All Priority 0 tasks marked as complete
+
 ## [Latest] - Phase 4 Complete: Performance Enhancements (2025-08-01)
 
 ### Summary

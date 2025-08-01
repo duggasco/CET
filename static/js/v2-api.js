@@ -150,12 +150,15 @@ const v2Api = {
 
     // Transform v2 response to match v1 format (for compatibility)
     transformToV1Format(v2Data) {
+        // Extract chart data from nested structure
+        const chartData = v2Data.charts || {};
+        
         return {
-            client_balances: v2Data.clients || [],
-            fund_balances: v2Data.funds || [],
-            account_details: v2Data.accounts || [],
-            recent_history: v2Data.recent_history || [],
-            long_term_history: v2Data.long_term_history || []
+            client_balances: v2Data.client_balances || v2Data.clients || [],
+            fund_balances: v2Data.fund_balances || v2Data.funds || [],
+            account_details: v2Data.account_details || v2Data.accounts || [],
+            recent_history: chartData.recent_history || [],
+            long_term_history: chartData.long_term_history || []
         };
     }
 };

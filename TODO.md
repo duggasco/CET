@@ -2,12 +2,99 @@
 
 Based on PLAN.md - Track implementation progress by marking items as completed.
 
-## 🚨 PRIORITY 0: Multi-Selection Table Display Bug Fix (URGENT)
+## ✅ RESOLVED: V2 Multi-Selection Table Persistence Bug (URGENT)
+
+### Issue Description
+When using v2 charts with multi-table selections (e.g., 2 clients + 1 fund), source tables incorrectly show only the intersection instead of maintaining Tableau-like behavior where all items are shown with selections highlighted.
+
+### Root Cause (Identified 2025-08-01)
+`loadFilteredData()` only sets `selection_source` for single-table selections. For multi-table selections, no `selection_source` is set, causing all tables to show filtered intersections instead of the expected behavior.
+
+### Implementation Plan (Claude + Gemini Consensus) ✅ COMPLETED
+
+#### Modify loadFilteredData() in app.js ✅
+- [x] Remove single-table-only logic for `selection_source`
+- [x] Implement parallel API calls pattern:
+  - [x] First call: Get intersection data for charts/KPIs
+  - [x] Additional calls: Get "all items" data for each table with selections
+  - [x] Use `Promise.allSettled()` for robust error handling
+- [x] Create helper function for proper URL construction:
+  ```javascript
+  function appendSelectionSource(queryString, source) {
+      const separator = queryString ? '&' : '?';
+      return `${queryString}${separator}selection_source=${source}`;
+  }
+  ```
+- [x] Combine results appropriately:
+  - [x] Charts/KPIs use intersection data
+  - [x] Tables with selections use "all items" data
+  - [x] Other tables use intersection data
+- [x] Implement fallback to intersection data on individual call failures
+
+#### Testing Requirements ✅
+- [x] Test multi-selection: 2 clients + 1 fund
+- [x] Test all three tables with selections
+- [x] Test error handling (simulate API failures)
+- [x] Verify Tableau-like behavior is restored
+- [x] Ensure no regression in single-table selections
+- [x] Test with text filters active
+- [x] Test performance with parallel calls
+
+#### Documentation ✅
+- [x] Update BUGS.md to mark as RESOLVED once fixed
+- [x] Update CHANGELOG.md with implementation details
+- [x] Document the parallel API call pattern
+
+### Resolution Summary
+The fix was successfully implemented on 2025-08-01. Multi-table selections now properly maintain Tableau-like behavior where source tables show all items with selections highlighted. The implementation uses parallel API calls with `Promise.allSettled()` for robust error handling and efficient performance.
+
+## 🔥 PRIORITY 0: KPI/Chart Reversion Bug Fix (URGENT) ✅ RESOLVED
+
+### Issue Description
+KPIs and charts briefly show correct filtered values before reverting to full AUM when multi-selecting with v2 tables enabled. This is caused by double API calls.
+
+### Resolution (2025-08-01)
+The bug was successfully fixed by modifying tables-v2.js to accept pre-fetched data and updating all loadXData() functions in app.js to pass data directly to tables-v2, eliminating double API calls.
+
+### Implementation Plan (Agreed with Gemini AI) ✅ COMPLETED
+
+#### Modify tables-v2.js ✅
+- [x] Update `updateTables()` method to accept either data or params
+  - [x] Check if argument contains data properties (client_balances, fund_balances, account_details)
+  - [x] If data provided, use it directly without API call
+  - [x] If params provided, maintain existing fetch behavior
+  - [x] Only update tables that have data (avoid clearing with undefined)
+
+#### Update all loadXData() functions in app.js ✅
+- [x] Replace tableManager calls with direct tablesV2.updateTables(data) calls:
+  - [x] Update `loadOverviewData()`
+  - [x] Update `loadFilteredData()`
+  - [x] Update `loadClientData()`
+  - [x] Update `loadFundData()`
+  - [x] Update `loadAccountData()`
+  - [x] Update `loadClientFundData()`
+- [x] Keep `restoreSelectionVisuals()` calls after table updates
+- [x] Keep `updateDownloadButton()` calls where applicable
+
+#### Testing ✅
+- [x] Verify KPIs no longer revert to full AUM
+- [x] Confirm single API call per action (no doubles)
+- [x] Test all selection combinations
+- [x] Ensure no regressions in table behavior
+- [x] Test partial data updates work correctly
+
+#### Documentation ✅
+- [x] Update BUGS.md to mark as RESOLVED once fixed
+- [x] Update CHANGELOG.md with implementation details
+- [x] Document the architectural simplification
+
+## 🚨 PRIORITY 0: Multi-Selection Table Display Bug Fix (URGENT) ✅ RESOLVED
 
 ### Issue Description
 Tables only show selected items instead of all items with selections highlighted. This breaks the Tableau-like behavior and is a regression from v1 functionality.
 
-### ⚠️ CRITICAL: Fix V2 endpoints we're migrating TO, not deprecated ones!
+### Resolution (2025-08-01)
+The bug was successfully fixed by updating the frontend to use the v2 API endpoint (`/api/v2/dashboard`) instead of the deprecated v1 endpoint (`/api/data`). The v2 endpoint supports the `selection_source` parameter which enables Tableau-like behavior.
 
 ### Backend Implementation - V2 Architecture ✅ COMPLETED
 
@@ -45,31 +132,33 @@ Tables only show selected items instead of all items with selections highlighted
   - [x] _get_fund_balances_with_metrics_paginated
   - [x] _get_account_details_with_metrics_paginated
 
-### Frontend Implementation ✅ PARTIALLY COMPLETED
+### Frontend Implementation ✅ COMPLETED
 
 #### Direct API calls (app.js - loadFilteredData function ~line 1697)
 - [x] Add selection source determination logic after try block
-- [x] Update URL construction to include selection_source for old /api/data endpoint
+- [x] Update URL construction to include selection_source
+- [x] **CRITICAL FIX**: Updated to use v2 API endpoint instead of v1
+- [x] Added compatibility handling for v2 API response format
 
 #### V2 API Integration (for tables using apiWrapper)
 - [x] Update getCurrentSelectionParams to include selectionSource (~line 23)
 - [x] Update apiWrapper.loadDataV2 to pass selectionSource through (~line 63)
-- [ ] Update v2Api.buildQueryParams to include selection_source parameter
-  - [ ] Add selection_source to query params if present in selections object
+- [x] Update v2Api.buildQueryParams to include selection_source parameter
+  - [x] Add selection_source to query params if present in selections object
 
-### Testing
-- [ ] Test single client selection - verify all clients visible
-- [ ] Test multiple client selections - verify all clients visible
-- [ ] Test client + fund selection - verify intersection behavior
-- [ ] Test all three table selections - verify intersection behavior
-- [ ] Verify performance is not impacted
-- [ ] Test with text filters active
-- [ ] Test with date selections
+### Testing ✅ COMPLETED
+- [x] Test single client selection - verify all clients visible
+- [x] Test multiple client selections - verify all clients visible
+- [x] Test client + fund selection - verify intersection behavior
+- [x] Test all three table selections - verify intersection behavior
+- [x] Verify performance is not impacted
+- [x] Test with text filters active
+- [x] Test with date selections
 
-### Documentation
-- [ ] Update BUGS.md to mark issue as RESOLVED
-- [ ] Update CHANGELOG.md with fix details
-- [ ] Update API documentation for new parameter
+### Documentation ✅ COMPLETED
+- [x] Update BUGS.md to mark issue as RESOLVED
+- [x] Update CHANGELOG.md with fix details
+- [x] Update API documentation for new parameter
 
 ## Phase 1: Critical Fixes (2 weeks) ✅ COMPLETED
 
@@ -128,7 +217,7 @@ Tables only show selected items instead of all items with selections highlighted
 - [ ] WebSocket architecture spike - deferred
 - [x] Create comprehensive test suite
 
-## Phase 3: Incremental Migration (6-8 weeks) 🚧 PAUSED - Fix multi-selection bug first!
+## Phase 3: Incremental Migration (6-8 weeks) 🚧 IN PROGRESS - Ready to continue!
 
 ### Frontend Infrastructure ✅ COMPLETED
 - [x] Implement normalized cache (vanilla JS instead of RTK Query)
@@ -202,11 +291,12 @@ Tables only show selected items instead of all items with selections highlighted
 ---
 
 **Last Updated:** 2025-08-01
-**Status:** URGENT - Multi-selection bug fix required before continuing Phase 3
-**Current:** Phase 3 PAUSED at Week 4 of 8 - Must fix regression first
+**Status:** Both Priority 0 bugs FIXED - Phase 3 ready to continue
+**Current:** Phase 3 Week 4 of 8 complete - Ready for fund table migration
 **Next Steps:** 
-1. Fix multi-selection table display bug (Priority 0)
-2. Resume Phase 3 Week 5-6: Migrate Fund table to v2 API
+1. ✅ Multi-selection table display bug fixed (Priority 0)
+2. ✅ KPI/Chart reversion bug fixed (Priority 0)
+3. Resume Phase 3 Week 5-6: Migrate Fund table to v2 API
 
 ## Summary of Phase 1 Accomplishments:
 1. ✅ Fixed `/api/data` endpoint WHERE clause inconsistencies

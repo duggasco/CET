@@ -103,26 +103,29 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
 - Complete test coverage
 - API documentation available
 
-## Phase 2.5: Multi-Selection Display Bug Fix (1 week) 🟡 IN PROGRESS
+## Phase 2.5: Multi-Selection Display Bug Fix (1 week) ✅ COMPLETED
 **Goal:** Fix table display regression before continuing migration
+**Completed:** 2025-08-01
 
-### Implementation Status (as of 2025-08-01):
+### Implementation Status:
 ✅ Backend implementation complete:
 - Added selection_source parameter to /api/v2/dashboard endpoint
 - Updated DashboardService to accept and use selection_source
 - Modified _build_full_where_clause to conditionally exclude filters
 - Updated all table methods (regular and paginated) to use selection_source
 
-🟡 Frontend implementation in progress:
-- ✅ Updated loadFilteredData for old /api/data endpoint
-- ✅ Updated getCurrentSelectionParams to include selectionSource
-- ✅ Updated apiWrapper to pass selectionSource through
-- ⏳ Need to update v2Api.buildQueryParams to include selection_source
+✅ Frontend implementation complete:
+- Updated loadFilteredData to use v2 API endpoint (/api/v2/dashboard)
+- Updated getCurrentSelectionParams to include selectionSource
+- Updated apiWrapper to pass selectionSource through
+- Updated v2Api.buildQueryParams to include selection_source
+- Added compatibility handling for v2 API response format
 
-⏳ Testing pending:
-- Need to test single table selections
-- Need to test multi-table selections
-- Need to verify v2 API flow
+✅ Testing complete:
+- Single table selections show all items with highlights
+- Multi-table selections show proper intersections
+- v2 API flow verified and working correctly
+- Tableau-like behavior restored
 
 ### Final Implementation Plan (V2 Architecture):
 
@@ -216,20 +219,23 @@ const url = `/api/data${queryString}${selectionParam}`;
 - **Critical**: Fix the v2 endpoint we're migrating TO, not the deprecated one
 
 ### Success Criteria:
-- Single table selections show ALL items with selections highlighted
-- Multi-table selections show proper intersections
-- No performance regression
-- Maintains backward compatibility
+- ✅ Single table selections show ALL items with selections highlighted
+- ✅ Multi-table selections show proper intersections
+- ✅ No performance regression
+- ✅ Maintains backward compatibility
 
-## Phase 3: Incremental Migration (6-8 weeks) 🚧 PAUSED
+### Resolution Summary:
+The bug was successfully fixed by updating the frontend to use the v2 API endpoint that supports the selection_source parameter. The key fix was in loadFilteredData() which was still using the deprecated v1 endpoint. Once updated to use /api/v2/dashboard, the Tableau-like behavior worked as expected.
+
+## Phase 3: Incremental Migration (6-8 weeks) 🚧 IN PROGRESS
 **Goal:** Migrate safely without breaking production
 
 ### Progress Update (2025-08-01):
 - ✅ Infrastructure setup complete (Week 0-1)
 - ✅ Charts migrated to v2 API (Week 1-2)
 - ✅ Client table migrated to v2 API (Week 3-4)
-- 🛑 PAUSED: Must fix multi-selection bug before continuing
-- 🔄 Fund table migration postponed (Week 5-6)
+- ✅ Multi-selection bug fixed - Phase 2.5 complete
+- 🔄 Fund table migration ready to resume (Week 5-6)
 
 ### Frontend Changes:
 1. Implement normalized cache:
@@ -396,11 +402,12 @@ cacheKey = hash({
 
 ## Current Status (2025-08-01)
 - Phase 1 & 2 complete
+- Phase 2.5 complete - Multi-selection bug fixed
 - Phase 3 infrastructure built and tested
 - Charts successfully migrated to v2 API
 - Client table successfully migrated to v2 API
-- Multi-selection 500 error fixed
-- On track for fund and account table migrations
+- Multi-selection behavior restored (Tableau-like)
+- Ready to resume fund and account table migrations
 
 ## Next Steps
 1. Begin Phase 1 implementation immediately

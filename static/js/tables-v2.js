@@ -85,30 +85,48 @@ const tablesV2 = {
         });
     },
     
-    // Main update function that fetches data and updates all tables
-    async updateTables(params) {
+    // Main update function that accepts either data or params
+    async updateTables(dataOrParams) {
         try {
-            console.log('[Tables V2] Fetching data with params:', params);
+            let data;
             
-            // Build params for apiWrapper.loadData
-            const apiParams = {
-                useDataEndpoint: true, // Use /api/data endpoint for v1 compatibility
-                queryString: params.queryString || '' // Use queryString from app.js
-            };
+            // Check if we received data directly (has the expected properties)
+            if (dataOrParams && (dataOrParams.client_balances !== undefined || 
+                                 dataOrParams.fund_balances !== undefined || 
+                                 dataOrParams.account_details !== undefined)) {
+                console.log('[Tables V2] Using provided data');
+                data = dataOrParams;
+            } else {
+                // Legacy path: fetch data using params
+                console.log('[Tables V2] Fetching data with params:', dataOrParams);
+                const params = dataOrParams || {};
+                
+                // Build params for apiWrapper.loadData
+                const apiParams = {
+                    useDataEndpoint: true, // Use /api/data endpoint for v1 compatibility
+                    queryString: params.queryString || '' // Use queryString from app.js
+                };
+                
+                // Add specific params if provided
+                if (params.clientId) apiParams.clientId = params.clientId;
+                if (params.fundName) apiParams.fundName = params.fundName;
+                if (params.accountId) apiParams.accountId = params.accountId;
+                if (params.date) apiParams.date = params.date;
+                
+                // Use the API wrapper to fetch data
+                data = await apiWrapper.loadData(apiParams);
+            }
             
-            // Add specific params if provided
-            if (params.clientId) apiParams.clientId = params.clientId;
-            if (params.fundName) apiParams.fundName = params.fundName;
-            if (params.accountId) apiParams.accountId = params.accountId;
-            if (params.date) apiParams.date = params.date;
-            
-            // Use the API wrapper to fetch data
-            const data = await apiWrapper.loadData(apiParams);
-            
-            // Update all three tables with the fetched data
-            this.updateClientTable(data.client_balances || []);
-            this.updateFundTable(data.fund_balances || []);
-            this.updateAccountTable(data.account_details || []);
+            // Only update tables that have data (avoid clearing with undefined)
+            if (data.client_balances !== undefined) {
+                this.updateClientTable(data.client_balances);
+            }
+            if (data.fund_balances !== undefined) {
+                this.updateFundTable(data.fund_balances);
+            }
+            if (data.account_details !== undefined) {
+                this.updateAccountTable(data.account_details);
+            }
             
             // Return the data for other components that might need it
             return data;

@@ -48,6 +48,7 @@ run_with_docker() {
         --name "${APP_NAME}" \
         -p "${PORT}:${PORT}" \
         -e "FLASK_PORT=${PORT}" \
+        -e 'FEATURE_FLAGS={"useV2Tables":true,"useV2Charts":true,"useV2DashboardApi":true}' \
         -v "$(pwd)/client_exploration.db:/app/client_exploration.db" \
         "${DOCKER_IMAGE}"; then
         echo -e "${GREEN}✓ Container started successfully${NC}"
