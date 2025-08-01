@@ -1,6 +1,61 @@
 # Changelog
 
-## [Latest] - Phase 2: v2 API Foundation
+## [Latest] - Phase 3: Frontend Migration Infrastructure (2025-08-01)
+
+### Added
+- **Normalized Cache System** (`static/js/cache.js`)
+  - Entity-based storage for clients, funds, and accounts
+  - TTL-based query caching (5 min for entities, 2 min for queries)
+  - Selective cache invalidation based on user selections
+  - Cache statistics and debugging helpers
+
+- **V2 API Client** (`static/js/v2-api.js`)
+  - Unified `fetchDataV2` function for v2 endpoint calls
+  - Automatic cache integration
+  - Response normalization and transformation
+  - Retry logic with configurable attempts
+
+- **API Wrapper** (`static/js/api-wrapper.js`)
+  - Feature flag-based routing between v1 and v2 APIs
+  - Automatic v2 to v1 fallback on errors
+  - A/B testing support with stable user assignment
+  - Metrics collection and buffering
+
+- **Request/Response Interceptors** (`static/js/interceptors.js`)
+  - Global fetch interception for monitoring
+  - Performance tracking and aggregation
+  - Error tracking and reporting
+  - Configurable request/response logging
+
+- **Docker Infrastructure**
+  - Multi-container setup with docker-compose
+  - Three instances: main (with flags), v1-only, v2-only
+  - Nginx reverse proxy for A/B testing
+  - Environment-based feature flag configuration
+
+- **Feature Flag System**
+  - Backend injection via Flask templates
+  - Frontend checking in apiWrapper
+  - Support for gradual rollout percentages
+  - Per-user stable assignment for A/B testing
+
+### Technical Decisions
+- Chose vanilla JS over React/Redux to maintain gradual migration
+- Implemented in-memory cache instead of persistent storage
+- Used localStorage for A/B test user assignment stability
+- Created compatibility layer to transform v2 responses to v1 format
+
+### Infrastructure
+- Docker Compose configuration for isolated testing
+- Nginx configuration for load balancing and A/B routing
+- Test script (`test-docker.sh`) for validation
+
+### Next Steps
+- Begin component migration starting with charts (simplest)
+- Implement Playwright tests for migration validation
+- Set up monitoring dashboard for A/B test metrics
+
+## [Previous] - Phase 2: v2 API Foundation
 
 ### Added
 - **Repository Pattern Architecture**

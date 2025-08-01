@@ -19,6 +19,59 @@ let textFilters = {
     accountNumber: ''
 };
 
+// Get current selection parameters for v2 API
+function getCurrentSelectionParams() {
+    return {
+        clientIds: Array.from(selectionState.clients),
+        fundNames: Array.from(selectionState.funds),
+        accountIds: Array.from(selectionState.accounts),
+        textFilters: textFilters,
+        date: currentFilter.type === 'date' ? currentFilter.value : null,
+        queryString: buildQueryString()
+    };
+}
+
+// Chart manager to handle v1/v2 chart routing
+const chartManager = {
+    // Update charts based on feature flag
+    update: function(data) {
+        if (window.featureFlags?.useV2Charts) {
+            // V2 charts fetch their own data
+            console.log('[Chart Manager] Using v2 charts');
+            chartsV2.updateCharts(getCurrentSelectionParams());
+        } else {
+            // V1 charts use passed data
+            console.log('[Chart Manager] Using v1 charts');
+            if (data && data.recent_history) {
+                updateRecentChart(data.recent_history);
+            }
+            if (data && data.long_term_history) {
+                updateLongTermChart(data.long_term_history);
+            }
+        }
+    },
+    
+    // Initialize charts
+    init: function() {
+        if (window.featureFlags?.useV2Charts) {
+            console.log('[Chart Manager] Initializing v2 charts');
+            chartsV2.init();
+        }
+        // V1 charts initialize inline, no init needed
+    },
+    
+    // Clear charts
+    clear: function() {
+        if (window.featureFlags?.useV2Charts) {
+            chartsV2.clearCharts();
+        } else {
+            // Clear v1 charts
+            updateRecentChart([]);
+            updateLongTermChart([]);
+        }
+    }
+};
+
 // Mobile detection function
 function detectMobile() {
     // Check multiple conditions for mobile detection
@@ -79,7 +132,12 @@ function buildQueryString(includeSelections = false) {
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     applyMobileClass();
-    initializeCharts();
+    // Initialize charts based on feature flag
+    if (window.featureFlags?.useV2Charts) {
+        chartManager.init();
+    } else {
+        initializeCharts();
+    }
     initializeTableHandlers();
     initializeFilterInputs();
     initializeFilterToggle();
@@ -583,8 +641,7 @@ async function loadOverviewData() {
         currentFilter = { type: 'overview', value: null };
         updateFilterIndicator('All Clients - All Funds');
         updateKPICards(data);
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         updateClientTable(data.client_balances);
         updateFundTable(data.fund_balances);
         updateAccountTable(data.account_details);
@@ -674,8 +731,7 @@ async function loadDateData(dateString) {
         updateKPICards(data);
         
         // Update charts and tables with filtered data
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         
         // For tables, show full data if no selections, filtered data if selections exist
         if (hasClientSelection || hasFundSelection || hasAccountSelection) {
@@ -703,8 +759,7 @@ async function loadClientData(clientId, clientName) {
         const data = await response.json();
         
         currentFilter = { type: 'client', value: clientId, name: clientName };
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         
         // Update tables with filtered data
         // Keep full client list but highlight selected
@@ -733,8 +788,7 @@ async function loadFundData(fundName) {
         const data = await response.json();
         
         currentFilter = { type: 'fund', value: fundName };
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         
         // Show clients that have this fund
         updateClientTable(data.client_balances);
@@ -766,8 +820,7 @@ async function loadAccountData(accountId) {
         currentFilter = { type: 'account', value: accountId };
         
         // Update charts with account history
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         
         // For account view, show related data
         // Find the client for this account
@@ -853,8 +906,7 @@ async function loadAccountDataForFund(accountId, fundName) {
         currentFilter = { type: 'account-fund', accountId, fundName };
         
         // Update charts with account history for this specific fund
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         
         // For account view, show related data
         // Find the client for this account
@@ -1594,8 +1646,7 @@ async function loadFilteredData() {
         currentFilter = { type: 'multi', filters: data.filters };
         
         // Update all UI components
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         updateClientTable(data.client_balances);
         updateFundTable(data.fund_balances);
         updateAccountTable(data.account_details);
@@ -1622,8 +1673,7 @@ async function loadClientFundData(clientId, clientName, fundName) {
         
         currentFilter = { type: 'client-fund', clientId, clientName, fundName };
         
-        updateRecentChart(data.recent_history);
-        updateLongTermChart(data.long_term_history);
+        chartManager.update(data);
         
         // Update tables with filtered data
         // Backend now returns arrays instead of single objects

@@ -166,6 +166,20 @@
         </div>
     </div>
 
+    <!-- Feature flags from backend -->
+    <script>
+        window.featureFlags = {{ feature_flags | tojson }};
+        window.v2RolloutPercentage = {{ v2_rollout_percentage }};
+    </script>
+    
+    <!-- Load cache and v2 API modules before main app -->
+    <script src="/static/js/cache.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/v2-api.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/api-wrapper.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/interceptors.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/charts-v2.js?v={{ cache_bust }}"></script>
+    
+    <!-- Main application -->
     <script src="/static/js/app.js?v={{ cache_bust }}"></script>
 </body>
 </html>

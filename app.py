@@ -6,6 +6,7 @@ import time
 import csv
 from io import StringIO
 from contextlib import closing
+import os
 from services.dashboard_service import DashboardService
 
 app = Flask(__name__)
@@ -191,7 +192,18 @@ def build_filter_clause(client_ids=None, fund_names=None, account_ids=None,
 def index():
     # Generate cache bust parameter based on current timestamp
     cache_bust = int(time.time())
-    return render_template('index.html', cache_bust=cache_bust)
+    
+    # Load feature flags from environment
+    feature_flags_str = os.environ.get('FEATURE_FLAGS', '{}')
+    try:
+        feature_flags = json.loads(feature_flags_str)
+    except json.JSONDecodeError:
+        feature_flags = {}  # Default to empty if parsing fails
+    
+    # Check rollout percentage for A/B testing
+    v2_rollout_percentage = int(os.environ.get('V2_ROLLOUT_PERCENTAGE', '0'))
+    
+    return render_template('index.html', cache_bust=cache_bust, feature_flags=feature_flags, v2_rollout_percentage=v2_rollout_percentage)
 
 @app.route('/api/overview')
 def get_overview():
