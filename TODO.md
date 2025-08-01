@@ -7,29 +7,44 @@ Based on PLAN.md - Track implementation progress by marking items as completed.
 ### Issue Description
 Tables only show selected items instead of all items with selections highlighted. This breaks the Tableau-like behavior and is a regression from v1 functionality.
 
-### Backend Implementation
-- [ ] Update `/api/v2/dashboard` endpoint in app.py (~line 1982)
-  - [ ] Add `selection_source = request.args.get('selection_source')`
-  - [ ] Pass selection_source to service.get_dashboard_data()
-- [ ] Update DashboardService in dashboard_service.py
-  - [ ] Add selection_source parameter to get_dashboard_data method signature
-  - [ ] Pass selection_source to table methods (_get_client_balances_with_metrics, etc.)
-- [ ] Update `_build_full_where_clause` method
-  - [ ] Add `exclude_source: Optional[str] = None` parameter
-  - [ ] Skip client_ids filter if exclude_source == 'client'
-  - [ ] Skip fund_names filter if exclude_source == 'fund'
-  - [ ] Skip account_ids filter if exclude_source == 'account'
-- [ ] Update each table method to use selection_source
-  - [ ] _get_client_balances_with_metrics: Use exclude_source='client' if selection_source=='client'
-  - [ ] _get_fund_balances_with_metrics: Use exclude_source='fund' if selection_source=='fund'
-  - [ ] _get_account_details_with_metrics: Use exclude_source='account' if selection_source=='account'
+### ⚠️ CRITICAL: Changes go in `/api/data` endpoint (NOT v2 endpoint!)
 
-### Frontend Implementation
-- [ ] Update loadFilteredData function in app.js
-  - [ ] Add logic to determine selection_source
-  - [ ] Count selections in each table
-  - [ ] Set selection_source only if exactly one table has selections
-  - [ ] Add selection_source parameter to API call
+### Backend Implementation (app.py - lines 1630-1850)
+- [ ] Add selection_source parameter extraction (~line 1640)
+  ```python
+  selection_source = request.args.get('selection_source')
+  ```
+- [ ] Replace static exclude_filters with dynamic logic (~lines 1654-1687)
+  - [ ] Add conditional logic for client_exclude based on selection_source
+  - [ ] Add conditional logic for fund_exclude based on selection_source  
+  - [ ] Add conditional logic for account_exclude based on selection_source
+  - [ ] Update client_where_clause to use client_exclude
+  - [ ] Update fund_where_clause to use fund_exclude
+  - [ ] Create account_where_clause with account_exclude
+- [ ] Update account query (~line 1822)
+  - [ ] Change from using full_where_clause to account_where_clause
+  - [ ] Update account_query_params accordingly
+
+### Frontend Implementation (app.js - loadFilteredData function ~line 1697)
+- [ ] Add selection source determination logic after try block
+  ```javascript
+  let selectionSource = null;
+  const hasClients = selectionState.clients.size > 0;
+  const hasFunds = selectionState.funds.size > 0;
+  const hasAccounts = selectionState.accounts.size > 0;
+  const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
+  
+  if (selectionCount === 1) {
+      if (hasClients) selectionSource = 'client';
+      else if (hasFunds) selectionSource = 'fund';
+      else if (hasAccounts) selectionSource = 'account';
+  }
+  ```
+- [ ] Update URL construction to include selection_source
+  ```javascript
+  const selectionParam = selectionSource ? `&selection_source=${selectionSource}` : '';
+  const url = `/api/data${queryString}${selectionParam}`;
+  ```
 
 ### Testing
 - [ ] Test single client selection - verify all clients visible

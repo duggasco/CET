@@ -106,16 +106,64 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
 ## Phase 2.5: Multi-Selection Display Bug Fix (1 week) 🔴 URGENT
 **Goal:** Fix table display regression before continuing migration
 
-### Implementation Plan:
-1. **Backend Changes (app.py & dashboard_service.py)**:
-   - Add `selection_source` parameter to `/api/v2/dashboard`
-   - Modify `_build_full_where_clause` to accept `exclude_source` parameter
-   - Update table methods to conditionally exclude filters based on selection_source
+### Final Implementation Plan (Agreed with Gemini):
 
-2. **Frontend Changes (app.js)**:
-   - Update `loadFilteredData` to determine selection_source
-   - Pass selection_source parameter when single table has selections
-   - Maintain intersection behavior for multi-table selections
+#### 1. Backend Changes (app.py - `/api/data` endpoint)
+**Note**: Changes go in the OLD `/api/data` endpoint (line 1630), NOT the v2 endpoint!
+
+```python
+# Add selection_source parameter extraction (line ~1640)
+selection_source = request.args.get('selection_source')
+
+# Update filter logic for all three tables (lines ~1654-1687)
+# Determine exclusions based on selection source
+if selection_source == 'client':
+    client_exclude = ['client_ids']
+else:
+    client_exclude = []
+
+if selection_source == 'fund':
+    fund_exclude = ['fund_names']
+else:
+    fund_exclude = []
+
+if selection_source == 'account':
+    account_exclude = ['account_ids']
+else:
+    account_exclude = []
+
+# Apply exclusions to each table's filter clause
+client_where_clause, client_params = build_filter_clause(..., exclude_filters=client_exclude)
+fund_where_clause, fund_params = build_filter_clause(..., exclude_filters=fund_exclude)
+account_where_clause, account_params = build_filter_clause(..., exclude_filters=account_exclude)
+```
+
+#### 2. Frontend Changes (app.js - loadFilteredData function)
+```javascript
+// Determine selection source (only for single-table selections)
+let selectionSource = null;
+const hasClients = selectionState.clients.size > 0;
+const hasFunds = selectionState.funds.size > 0;
+const hasAccounts = selectionState.accounts.size > 0;
+
+const selectionCount = (hasClients ? 1 : 0) + (hasFunds ? 1 : 0) + (hasAccounts ? 1 : 0);
+
+if (selectionCount === 1) {
+    if (hasClients) selectionSource = 'client';
+    else if (hasFunds) selectionSource = 'fund';
+    else if (hasAccounts) selectionSource = 'account';
+}
+
+// Add to URL
+const selectionParam = selectionSource ? `&selection_source=${selectionSource}` : '';
+const url = `/api/data${queryString}${selectionParam}`;
+```
+
+### Key Discoveries:
+- The `exclude_filters` logic was a flawed attempt at Tableau-like behavior
+- Frontend calls `/api/data`, not `/api/v2/dashboard`
+- All three tables (clients, funds, accounts) need consistent handling
+- Charts/KPIs should always use full filters
 
 ### Success Criteria:
 - Single table selections show ALL items with selections highlighted
