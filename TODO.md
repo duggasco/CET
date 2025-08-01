@@ -7,23 +7,39 @@ Based on PLAN.md - Track implementation progress by marking items as completed.
 ### Issue Description
 Tables only show selected items instead of all items with selections highlighted. This breaks the Tableau-like behavior and is a regression from v1 functionality.
 
-### ⚠️ CRITICAL: Changes go in `/api/data` endpoint (NOT v2 endpoint!)
+### ⚠️ CRITICAL: Fix V2 endpoints we're migrating TO, not deprecated ones!
 
-### Backend Implementation (app.py - lines 1630-1850)
-- [ ] Add selection_source parameter extraction (~line 1640)
+### Backend Implementation - V2 Architecture
+
+#### `/api/v2/dashboard` endpoint (app.py ~line 1982)
+- [ ] Add selection_source parameter extraction
   ```python
   selection_source = request.args.get('selection_source')
   ```
-- [ ] Replace static exclude_filters with dynamic logic (~lines 1654-1687)
-  - [ ] Add conditional logic for client_exclude based on selection_source
-  - [ ] Add conditional logic for fund_exclude based on selection_source  
-  - [ ] Add conditional logic for account_exclude based on selection_source
-  - [ ] Update client_where_clause to use client_exclude
-  - [ ] Update fund_where_clause to use fund_exclude
-  - [ ] Create account_where_clause with account_exclude
-- [ ] Update account query (~line 1822)
-  - [ ] Change from using full_where_clause to account_where_clause
-  - [ ] Update account_query_params accordingly
+- [ ] Pass selection_source to dashboard service (~line 2027)
+  ```python
+  data = service.get_dashboard_data(
+      # ... existing params ...
+      selection_source=selection_source
+  )
+  ```
+
+#### DashboardService (dashboard_service.py)
+- [ ] Update get_dashboard_data method signature
+  - [ ] Add `selection_source: Optional[str] = None` parameter
+- [ ] Pass selection_source to table methods (~lines 59-77)
+  - [ ] Update _get_client_balances_with_metrics call
+  - [ ] Update _get_fund_balances_with_metrics call
+  - [ ] Update _get_account_details_with_metrics call
+- [ ] Update _build_full_where_clause method (~line 432)
+  - [ ] Add `exclude_source: Optional[str] = None` parameter
+  - [ ] Skip client_ids filter if exclude_source == 'client'
+  - [ ] Skip fund_names filter if exclude_source == 'fund'
+  - [ ] Skip account_ids filter if exclude_source == 'account'
+- [ ] Update each table method to use selection_source
+  - [ ] _get_client_balances_with_metrics: Use exclude_source='client' if selection_source=='client'
+  - [ ] _get_fund_balances_with_metrics: Use exclude_source='fund' if selection_source=='fund'
+  - [ ] _get_account_details_with_metrics: Use exclude_source='account' if selection_source=='account'
 
 ### Frontend Implementation (app.js - loadFilteredData function ~line 1697)
 - [ ] Add selection source determination logic after try block
@@ -41,10 +57,8 @@ Tables only show selected items instead of all items with selections highlighted
   }
   ```
 - [ ] Update URL construction to include selection_source
-  ```javascript
-  const selectionParam = selectionSource ? `&selection_source=${selectionSource}` : '';
-  const url = `/api/data${queryString}${selectionParam}`;
-  ```
+  - [ ] Verify frontend is using v2 API via apiWrapper/tables-v2.js
+  - [ ] Selection source will flow through apiWrapper to v2 endpoint
 
 ### Testing
 - [ ] Test single client selection - verify all clients visible

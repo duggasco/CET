@@ -106,39 +106,70 @@ GET /api/v2/dashboard?client_id=123&fund_name=Prime&fields=client_balances.name,
 ## Phase 2.5: Multi-Selection Display Bug Fix (1 week) 🔴 URGENT
 **Goal:** Fix table display regression before continuing migration
 
-### Final Implementation Plan (Agreed with Gemini):
+### Final Implementation Plan (V2 Architecture):
 
-#### 1. Backend Changes (app.py - `/api/data` endpoint)
-**Note**: Changes go in the OLD `/api/data` endpoint (line 1630), NOT the v2 endpoint!
+#### 1. Backend Changes - `/api/v2/dashboard` endpoint (app.py)
+**Note**: We're fixing the V2 endpoint we're migrating TO, not the deprecated one!
 
 ```python
-# Add selection_source parameter extraction (line ~1640)
+# Add selection_source parameter extraction (line ~1982)
 selection_source = request.args.get('selection_source')
 
-# Update filter logic for all three tables (lines ~1654-1687)
-# Determine exclusions based on selection source
-if selection_source == 'client':
-    client_exclude = ['client_ids']
-else:
-    client_exclude = []
-
-if selection_source == 'fund':
-    fund_exclude = ['fund_names']
-else:
-    fund_exclude = []
-
-if selection_source == 'account':
-    account_exclude = ['account_ids']
-else:
-    account_exclude = []
-
-# Apply exclusions to each table's filter clause
-client_where_clause, client_params = build_filter_clause(..., exclude_filters=client_exclude)
-fund_where_clause, fund_params = build_filter_clause(..., exclude_filters=fund_exclude)
-account_where_clause, account_params = build_filter_clause(..., exclude_filters=account_exclude)
+# Pass to dashboard service (line ~2027)
+data = service.get_dashboard_data(
+    client_ids=client_ids if client_ids else None,
+    fund_names=fund_names if fund_names else None,
+    account_ids=account_ids if account_ids else None,
+    date=date,
+    text_filters=text_filters if text_filters else None,
+    page_size=page_size,
+    client_cursor=client_cursor,
+    fund_cursor=fund_cursor,
+    account_cursor=account_cursor,
+    include_charts=include_charts,
+    selection_source=selection_source  # NEW
+)
 ```
 
-#### 2. Frontend Changes (app.js - loadFilteredData function)
+#### 2. Backend Changes - DashboardService (dashboard_service.py)
+
+```python
+# Update method signature
+def get_dashboard_data(self, 
+    # ... existing params ...
+    selection_source: Optional[str] = None) -> Dict:
+
+# Pass to table methods
+client_data = self._get_client_balances_with_metrics(filters, ref_date, selection_source)
+fund_data = self._get_fund_balances_with_metrics(filters, ref_date, selection_source)
+account_data = self._get_account_details_with_metrics(filters, ref_date, selection_source)
+
+# Update _build_full_where_clause
+def _build_full_where_clause(self, filters: Dict, exclude_source: Optional[str] = None) -> Tuple[str, Dict]:
+    conditions = []
+    params = {}
+    
+    # Handle list filters with exclusions
+    if filters.get("client_ids") and exclude_source != 'client':
+        # ... add client condition
+    if filters.get("fund_names") and exclude_source != 'fund':
+        # ... add fund condition
+    if filters.get("account_ids") and exclude_source != 'account':
+        # ... add account condition
+    
+    # Text filters always applied (no exclusions)
+    # ... rest of method
+
+# Update each table method
+def _get_client_balances_with_metrics(self, filters: Dict, ref_date: str, selection_source: Optional[str] = None):
+    if selection_source == 'client':
+        where_conditions, params = self._build_full_where_clause(filters, exclude_source='client')
+    else:
+        where_conditions, params = self._build_full_where_clause(filters)
+    # ... rest of method
+```
+
+#### 3. Frontend Changes (app.js - loadFilteredData function)
 ```javascript
 // Determine selection source (only for single-table selections)
 let selectionSource = null;
@@ -160,10 +191,11 @@ const url = `/api/data${queryString}${selectionParam}`;
 ```
 
 ### Key Discoveries:
-- The `exclude_filters` logic was a flawed attempt at Tableau-like behavior
-- Frontend calls `/api/data`, not `/api/v2/dashboard`
+- The `exclude_filters` logic in old `/api/data` was a flawed attempt at Tableau-like behavior
+- Frontend using v2 tables should call `/api/v2/dashboard` (via apiWrapper)
 - All three tables (clients, funds, accounts) need consistent handling
 - Charts/KPIs should always use full filters
+- **Critical**: Fix the v2 endpoint we're migrating TO, not the deprecated one
 
 ### Success Criteria:
 - Single table selections show ALL items with selections highlighted
